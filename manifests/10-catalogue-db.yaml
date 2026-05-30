@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue-db
+  namespace: mogambo
+  labels: { app: catalogue-db }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: catalogue-db }
+  template:
+    metadata:
+      labels: { app: catalogue-db }
+    spec:
+      containers:
+        - name: db
+          image: andriohanania/catalogue-db:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3306
+              name: mysql
+          env:
+            - { name: MYSQL_ALLOW_EMPTY_PASSWORD, value: "true" }
+            - { name: MYSQL_DATABASE,             value: "socksdb" }
+          resources:
+            requests: { cpu: "50m",  memory: "256Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogue-db
+  namespace: mogambo
+spec:
+  type: ClusterIP
+  selector: { app: catalogue-db }
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306

@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: mogambo
+  labels: { app: frontend }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: frontend }
+  template:
+    metadata:
+      labels: { app: frontend }
+    spec:
+      containers:
+        - name: frontend
+          image: andriohanania/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8079
+              name: http
+          resources:
+            requests: { cpu: "20m",  memory: "64Mi" }
+            limits:   { cpu: "200m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: mogambo
+spec:
+  type: LoadBalancer
+  selector: { app: frontend }
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8079
