@@ -23,6 +23,7 @@ All five services live in the `mogambo` namespace. Frontend is the only external
 cd ~/mogambo-project/mogambo-kubernetes
 kubectl apply -f namespaces/
 kubectl apply -f manifests/
+kubectl apply -f hpa/
 kubectl get pods,svc -n mogambo
 ```
 
