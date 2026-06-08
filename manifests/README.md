@@ -24,6 +24,7 @@ cd ~/mogambo-project/mogambo-kubernetes
 kubectl apply -f namespaces/
 kubectl apply -f manifests/
 kubectl apply -f hpa/
+kubectl apply -f vpa/
 kubectl get pods,svc -n mogambo
 ```
 
