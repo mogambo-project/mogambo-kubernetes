@@ -1,0 +1,8 @@
+# Command for Creating Public Key: age-keygen -o ~/.config/sops/age/keys.txt
+# Command for Encrypting a File: sops --encrypt --in-place *-secret.yaml
+# Command for Decrypting a File: sops -d *-secret.yaml
+# Kubernetes doesn't read encrypted files. So run:
+# sops -d *-secret.yaml | kubectl apply -f -
+creation_rules:
+  - path_regex: .*secret.*\.yaml
+    age: age1h0uudxtc5r02ux66jhmrq3m9kmxec88dege7zfrmqun8deyr5uhqmwqvls

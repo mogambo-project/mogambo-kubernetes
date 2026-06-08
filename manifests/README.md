@@ -25,6 +25,9 @@ kubectl apply -f namespaces/
 kubectl apply -f manifests/
 kubectl apply -f hpa/
 kubectl apply -f vpa/
+for f in secrets/*-secret.yaml; do
+  sops -d "$f" | kubectl apply -f -
+done
 kubectl get pods,svc -n mogambo
 ```
 
