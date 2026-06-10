@@ -70,6 +70,41 @@ helm list -A
 
 Your own charts go in [charts/](./charts/), raw manifests in [manifests/](./manifests/).
 
+## Secrets (SOPS + age) & Jenkins jobs
+
+Encrypted Kubernetes Secrets live in [secrets/](./secrets/) and are managed with **SOPS + age**
+(rules in [.sops.yaml](./.sops.yaml)). Two Jenkins jobs (`sops-encrypt`, `sops-decrypt`) wrap the
+encrypt/decrypt workflow. Everything needed to reproduce them on another machine is version-controlled
+under [jenkins/](./jenkins/) — see **[jenkins/README.md](./jenkins/README.md)** for the full walkthrough.
+
+New developer, quick start:
+
+```bash
+# 1) install the CLI tools (Ubuntu/WSL)
+sudo apt-get update && sudo apt-get install -y age
+SOPS_VER=3.9.4
+sudo curl -fsSL -o /usr/local/bin/sops \
+  "https://github.com/getsops/sops/releases/download/v${SOPS_VER}/sops-v${SOPS_VER}.linux.$(dpkg --print-architecture)"
+sudo chmod +x /usr/local/bin/sops
+
+# 2) get/generate your age key (decryption key)
+mkdir -p ~/.config/sops/age
+age-keygen -o ~/.config/sops/age/keys.txt        # then add the printed public key to .sops.yaml recipients
+
+# 3) start Jenkins + the stack (Jenkins image has sops/age baked in)
+cd ../bootcamp/setup && docker compose up -d --build      # http://localhost:8080
+
+# 4) add Jenkins credentials: github-token (Secret text), sops-age-key (Secret file)  [see jenkins/README.md]
+# 5) create the jobs
+cd ../../mogambo-kubernetes && ./jenkins/install-jobs.sh
+```
+
+Encrypt / decrypt by hand:
+```bash
+sops --encrypt --in-place secrets/<name>-secret.yaml      # encrypt (needs only the public recipient)
+sops -d secrets/<name>-secret.yaml | kubectl apply -f -    # decrypt straight into the cluster (needs the age key)
+```
+
 ## Reset everything
 
 ```bash

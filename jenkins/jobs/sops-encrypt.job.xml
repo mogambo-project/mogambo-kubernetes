@@ -1,0 +1,29 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<!-- Job definition: a Pipeline that loads its script from this repo (SCM).
+     The actual pipeline logic lives in jenkins/pipelines/sops-encrypt.Jenkinsfile. -->
+<flow-definition plugin="workflow-job">
+  <description>Encrypt a secret with SOPS + age and optionally open a GitHub PR. Pipeline from SCM: jenkins/pipelines/sops-encrypt.Jenkinsfile</description>
+  <keepDependencies>false</keepDependencies>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps">
+    <scm class="hudson.plugins.git.GitSCM" plugin="git">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>https://github.com/mogambo-project/mogambo-kubernetes.git</url>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>*/master</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <submoduleCfg class="empty-list"/>
+      <extensions/>
+    </scm>
+    <scriptPath>jenkins/pipelines/sops-encrypt.Jenkinsfile</scriptPath>
+    <lightweight>true</lightweight>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>
