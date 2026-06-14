@@ -1,0 +1,30 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<!-- Redeploy job: Pipeline from SCM -> jenkins/pipelines/redeploy.Jenkinsfile.
+     Intended to live in the mogambo-tools folder. Needs a kubeconfig-<env> Secret-file
+     credential per environment (kubeconfig-dev for the local kind cluster). -->
+<flow-definition plugin="workflow-job">
+  <description>Redeploy a microservice's pods in a chosen environment (dev/staging/prod). Pipeline from SCM: jenkins/pipelines/redeploy.Jenkinsfile</description>
+  <keepDependencies>false</keepDependencies>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps">
+    <scm class="hudson.plugins.git.GitSCM" plugin="git">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>https://github.com/mogambo-project/mogambo-kubernetes.git</url>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>*/master</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <submoduleCfg class="empty-list"/>
+      <extensions/>
+    </scm>
+    <scriptPath>jenkins/pipelines/redeploy.Jenkinsfile</scriptPath>
+    <lightweight>true</lightweight>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>
