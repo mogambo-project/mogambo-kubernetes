@@ -25,8 +25,14 @@ pipeline {
   }
 
   environment {
-    // ENVIRONMENT -> kubeconfig "Secret file" credential id
-    ENV_CRED = "kubeconfig-${params.ENVIRONMENT}"
+    // Map params into env vars so the pipeline works on the FIRST build too: on a fresh
+    // Pipeline-from-SCM job, $PARAM env vars aren't populated on build #1, but params.X
+    // defaults are — so we derive the env vars from params.X here.
+    DEPLOY_ENV = "${params.ENVIRONMENT}"
+    ENV_CRED   = "kubeconfig-${params.ENVIRONMENT}"   // ENVIRONMENT -> kubeconfig-<env> credential id
+    SVC        = "${params.SERVICE}"
+    NS         = "${params.NAMESPACE}"
+    ACT        = "${params.ACTION}"
   }
 
   stages {
@@ -35,25 +41,25 @@ pipeline {
         withCredentials([file(credentialsId: env.ENV_CRED, variable: 'KUBECONFIG')]) {
           sh '''
             set -e
-            echo "Environment : $ENVIRONMENT  (kubeconfig credential: $ENV_CRED)"
+            echo "Environment : $DEPLOY_ENV  (kubeconfig credential: $ENV_CRED)"
             echo "Context     : $(kubectl config current-context)"
-            echo "Target      : deployment/$SERVICE  (namespace: $NAMESPACE, action: $ACTION)"
-            kubectl -n "$NAMESPACE" get deploy "$SERVICE"
+            echo "Target      : deployment/$SVC  (namespace: $NS, action: $ACT)"
+            kubectl -n "$NS" get deploy "$SVC"
 
-            if [ "$ACTION" = "scale-zero-then-up" ]; then
-              REPS=$(kubectl -n "$NAMESPACE" get deploy "$SERVICE" -o jsonpath='{.spec.replicas}')
+            if [ "$ACT" = "scale-zero-then-up" ]; then
+              REPS=$(kubectl -n "$NS" get deploy "$SVC" -o jsonpath='{.spec.replicas}')
               [ -z "$REPS" ] && REPS=1
-              echo "scaling $SERVICE to 0, then back to $REPS"
-              kubectl -n "$NAMESPACE" scale deploy/"$SERVICE" --replicas=0
+              echo "scaling $SVC to 0, then back to $REPS"
+              kubectl -n "$NS" scale deploy/"$SVC" --replicas=0
               sleep 3
-              kubectl -n "$NAMESPACE" scale deploy/"$SERVICE" --replicas="$REPS"
+              kubectl -n "$NS" scale deploy/"$SVC" --replicas="$REPS"
             else
-              kubectl -n "$NAMESPACE" rollout restart deploy/"$SERVICE"
+              kubectl -n "$NS" rollout restart deploy/"$SVC"
             fi
 
-            kubectl -n "$NAMESPACE" rollout status deploy/"$SERVICE" --timeout=180s
+            kubectl -n "$NS" rollout status deploy/"$SVC" --timeout=180s
             echo "---- pods now ----"
-            kubectl -n "$NAMESPACE" get pods -l app="$SERVICE" -o wide
+            kubectl -n "$NS" get pods -l app="$SVC" -o wide
           '''
         }
       }

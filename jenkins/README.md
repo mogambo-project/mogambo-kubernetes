@@ -9,7 +9,9 @@ machine**, version-controlled in git:
 | `pipelines/sops-decrypt.Jenkinsfile` | The decrypt pipeline (the actual logic). |
 | `jobs/sops-encrypt.job.xml` | Jenkins job definition → "Pipeline from SCM", points at the encrypt Jenkinsfile. |
 | `jobs/sops-decrypt.job.xml` | Jenkins job definition → "Pipeline from SCM", points at the decrypt Jenkinsfile. |
-| `install-jobs.sh` | Recreates both jobs in a running Jenkins container from the files above. |
+| `pipelines/redeploy.Jenkinsfile` | Multi-environment pod-redeploy pipeline (see [§8](#8-redeploy-job-multi-environment)). |
+| `jobs/redeploy-service.job.xml` | Job definition → "Pipeline from SCM", points at the redeploy Jenkinsfile. |
+| `install-jobs.sh` | Recreates the jobs in a running Jenkins container from the files above. |
 | `README.md` | This document. |
 
 > **TL;DR for a new developer:** install `sops`+`age` locally, get/generate an age key, start
@@ -246,3 +248,33 @@ onto this version-controlled, credential-based setup:
    ```
    then `docker compose up -d` to recreate Jenkins without it.
 5. Verify: run `sops-decrypt` (SINGLE on `secrets/carts-db-secret.yaml`) and `sops-encrypt`.
+
+---
+
+## 8. Redeploy job (multi-environment)
+
+`redeploy-service` (in the **`mogambo-tools`** folder) restarts a microservice's pods on a chosen
+cluster — handy locally to pull a freshly-pushed `:latest`, and ready for cloud envs later.
+Pipeline: [`pipelines/redeploy.Jenkinsfile`](pipelines/redeploy.Jenkinsfile).
+
+**Parameters:** `ENVIRONMENT` (dev/staging/prod), `SERVICE`, `NAMESPACE` (default `mogambo`),
+`ACTION` (`rollout-restart` — re-pulls `:latest` when `imagePullPolicy=Always` — or `scale-zero-then-up`).
+
+**How the multi-env selection works (the maintainable part):** the pipeline picks the target cluster
+purely by naming convention —
+```groovy
+ENV_CRED = "kubeconfig-${params.ENVIRONMENT}"   // -> Secret-file credential kubeconfig-dev / -staging / -prod
+```
+So **onboarding a new environment is two steps, no pipeline change:**
+1. Add a **Secret file** credential `kubeconfig-staging` (that cluster's kubeconfig).
+2. Add `staging` to the `ENVIRONMENT` choices in the Jenkinsfile.
+
+**What makes it work on this Jenkins (already set up):**
+- `kubectl` is baked into the [Jenkins image](../../bootcamp/setup/Dockerfile).
+- Jenkins is attached to the **`kind` docker network** in
+  [docker-compose.yml](../../bootcamp/setup/docker-compose.yml) so it can reach `practice-control-plane:6443`.
+- A **`kubeconfig-dev`** Secret-file credential holds the kind kubeconfig (in-cluster API address,
+  `insecure-skip-tls-verify` for local). It's referenced by ID only — never in code.
+
+> For a real cloud env, generate that cluster's kubeconfig (ideally a least-privilege ServiceAccount
+> token scoped to the app namespace, not a full admin cert), store it as `kubeconfig-<env>`, and you're done.
