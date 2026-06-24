@@ -25,10 +25,17 @@ kubectl apply -f namespaces/
 kubectl apply -f manifests/
 kubectl apply -f hpa/
 kubectl apply -f vpa/
+kubectl apply -f rbac/
 for f in secrets/*-secret.yaml; do
   sops -d "$f" | kubectl apply -f -
 done
 kubectl get pods,svc -n mogambo
+
+# verify the RBAC took effect (acts AS the jenkins-deployer ServiceAccount):
+kubectl auth can-i patch deployments -n mogambo \
+  --as=system:serviceaccount:mogambo:jenkins-deployer   # -> yes
+kubectl auth can-i get secrets -n mogambo \
+  --as=system:serviceaccount:mogambo:jenkins-deployer   # -> no
 ```
 
 Expect:

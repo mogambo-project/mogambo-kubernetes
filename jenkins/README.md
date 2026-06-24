@@ -273,8 +273,14 @@ So **onboarding a new environment is two steps, no pipeline change:**
 - `kubectl` is baked into the [Jenkins image](../../bootcamp/setup/Dockerfile).
 - Jenkins is attached to the **`kind` docker network** in
   [docker-compose.yml](../../bootcamp/setup/docker-compose.yml) so it can reach `practice-control-plane:6443`.
-- A **`kubeconfig-dev`** Secret-file credential holds the kind kubeconfig (in-cluster API address,
-  `insecure-skip-tls-verify` for local). It's referenced by ID only — never in code.
+- A **`kubeconfig-dev`** Secret-file credential holds the kubeconfig the job uses (in-cluster API
+  address `practice-control-plane:6443`, `insecure-skip-tls-verify` for local). Referenced by ID only —
+  never in code.
+  **As of the RBAC change, it carries a least-privilege `jenkins-deployer` ServiceAccount token**
+  (see [`../rbac/jenkins-deployer.yaml`](../rbac/jenkins-deployer.yaml)) — **not** the kind admin cert.
+  So even if Jenkins is compromised, it can only get/patch Deployments (+scale) and read pods **in
+  `mogambo`** — no Secrets, no `delete`, no other namespaces, no cluster-scoped access.
 
-> For a real cloud env, generate that cluster's kubeconfig (ideally a least-privilege ServiceAccount
-> token scoped to the app namespace, not a full admin cert), store it as `kubeconfig-<env>`, and you're done.
+> For a real cloud env, do the same thing: create a least-privilege ServiceAccount in that cluster
+> (a `Role` + `RoleBinding` scoped to the app namespace), generate a kubeconfig from its token, and store
+> it as `kubeconfig-<env>`. Never wire a full admin / cluster-admin credential into CI.

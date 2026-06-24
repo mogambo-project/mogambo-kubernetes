@@ -1,0 +1,61 @@
+# Least-privilege identity for the Jenkins redeploy job.
+# Replaces the kind admin (cluster-admin) cert that the redeploy job used before.
+#
+# Scope: ONLY what `kubectl rollout restart|status` and the scale-zero option need,
+#        and ONLY in the mogambo namespace. No cluster-scoped access, no Secrets,
+#        no other namespaces.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: jenkins-deployer
+  namespace: mogambo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role            # Role = namespaced (mogambo only). Not a ClusterRole on purpose.
+metadata:
+  name: jenkins-deployer
+  namespace: mogambo
+rules:
+  # see + rollout-restart (patch) + update deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  # the scale-zero-then-up action uses the scale subresource
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["get", "update", "patch"]
+  # `kubectl rollout status` watches the ReplicaSets a Deployment owns
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  # the pipeline lists pods at the end (kubectl get pods -l app=...)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding     # binds the Role to the SA, inside mogambo only
+metadata:
+  name: jenkins-deployer
+  namespace: mogambo
+subjects:
+  - kind: ServiceAccount
+    name: jenkins-deployer
+    namespace: mogambo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: jenkins-deployer
+---
+# k8s 1.24+ no longer auto-creates a token Secret for a ServiceAccount.
+# This creates a long-lived token (fine for a local dev CI credential; in prod you'd
+# prefer a short-lived projected/bound token that auto-rotates).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jenkins-deployer-token
+  namespace: mogambo
+  annotations:
+    kubernetes.io/service-account.name: jenkins-deployer
+type: kubernetes.io/service-account-token
