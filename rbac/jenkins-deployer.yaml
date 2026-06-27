@@ -4,15 +4,19 @@
 # Scope: ONLY what `kubectl rollout restart|status` and the scale-zero option need,
 #        and ONLY in the mogambo namespace. No cluster-scoped access, no Secrets,
 #        no other namespaces.
+#
+# k8s 1.24+ no longer auto-creates a token Secret for a ServiceAccount.
+# This creates a long-lived token (fine for a local dev CI credential; in prod you'd
+# prefer a short-lived projected/bound token that auto-rotates).
 ---
 apiVersion: v1
-kind: ServiceAccount
+kind: ServiceAccount # Subject
 metadata:
   name: jenkins-deployer
   namespace: mogambo
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role            # Role = namespaced (mogambo only). Not a ClusterRole on purpose.
+kind: Role # mogambo namespace only. Not a ClusterRole on purpose.
 metadata:
   name: jenkins-deployer
   namespace: mogambo
@@ -30,12 +34,12 @@ rules:
     resources: ["replicasets"]
     verbs: ["get", "list", "watch"]
   # the pipeline lists pods at the end (kubectl get pods -l app=...)
-  - apiGroups: [""]
+  - apiGroups: [""] # Core API
     resources: ["pods"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding     # binds the Role to the SA, inside mogambo only
+kind: RoleBinding # Binds the Role to the SA.
 metadata:
   name: jenkins-deployer
   namespace: mogambo
@@ -48,11 +52,8 @@ roleRef:
   kind: Role
   name: jenkins-deployer
 ---
-# k8s 1.24+ no longer auto-creates a token Secret for a ServiceAccount.
-# This creates a long-lived token (fine for a local dev CI credential; in prod you'd
-# prefer a short-lived projected/bound token that auto-rotates).
 apiVersion: v1
-kind: Secret
+kind: Secret # Every SA needs a mounted token.
 metadata:
   name: jenkins-deployer-token
   namespace: mogambo

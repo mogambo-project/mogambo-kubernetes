@@ -17,6 +17,8 @@ spec:
     metadata:
       labels: { app: catalogue }
     spec:
+      serviceAccountName: catalogue
+      automountServiceAccountToken: false
       containers:
         - name: catalogue
           image: andriohanania/catalogue:latest
@@ -40,3 +42,11 @@ spec:
     - name: http
       port: 80
       targetPort: 8081
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: catalogue
+  namespace: mogambo
+  labels: { app: catalogue }
+automountServiceAccountToken: false

@@ -12,6 +12,8 @@ spec:
     metadata:
       labels: { app: carts-db }
     spec:
+      serviceAccountName: carts-db
+      automountServiceAccountToken: false
       containers:
         - name: mongo
           image: mongo:6
@@ -20,8 +22,8 @@ spec:
             - containerPort: 27017
               name: mongo
           envFrom:
-          - secretRef:
-            name: carts-db-credentials
+            - secretRef:
+                name: carts-db-credentials
           resources:
             requests: { cpu: "50m",  memory: "256Mi" }
             limits:   { cpu: "500m", memory: "512Mi" }
@@ -39,3 +41,11 @@ spec:
     - name: mongo
       port: 27017
       targetPort: 27017
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: carts-db
+  namespace: mogambo
+  labels: { app: carts-db }
+automountServiceAccountToken: false

@@ -12,6 +12,8 @@ spec:
     metadata:
       labels: { app: catalogue-db }
     spec:
+      serviceAccountName: catalogue-db
+      automountServiceAccountToken: false
       containers:
         - name: db
           image: andriohanania/catalogue-db:latest
@@ -20,8 +22,8 @@ spec:
             - containerPort: 3306
               name: mysql
           envFrom:
-          - secretRef:
-            name: catalogue-db-credentials
+            - secretRef:
+                name: catalogue-db-credentials
           resources:
             requests: { cpu: "50m",  memory: "256Mi" }
             limits:   { cpu: "500m", memory: "512Mi" }
@@ -38,3 +40,11 @@ spec:
     - name: mysql
       port: 3306
       targetPort: 3306
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: catalogue-db
+  namespace: mogambo
+  labels: { app: catalogue-db }
+automountServiceAccountToken: false

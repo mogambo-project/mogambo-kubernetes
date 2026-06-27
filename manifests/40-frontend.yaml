@@ -17,6 +17,8 @@ spec:
     metadata:
       labels: { app: frontend }
     spec:
+      serviceAccountName: frontend
+      automountServiceAccountToken: false
       containers:
         - name: frontend
           image: andriohanania/frontend:latest
@@ -40,3 +42,11 @@ spec:
     - name: http
       port: 80
       targetPort: 8079
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend
+  namespace: mogambo
+  labels: { app: frontend }
+automountServiceAccountToken: false

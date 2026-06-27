@@ -17,6 +17,8 @@ spec:
     metadata:
       labels: { app: carts }
     spec:
+      serviceAccountName: carts
+      automountServiceAccountToken: false
       containers:
         - name: carts
           image: andriohanania/carts:latest
@@ -40,3 +42,11 @@ spec:
     - name: http
       port: 80
       targetPort: 80
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: carts
+  namespace: mogambo
+  labels: { app: carts }
+automountServiceAccountToken: false

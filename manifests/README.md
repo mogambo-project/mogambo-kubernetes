@@ -43,6 +43,30 @@ Expect:
 - `catalogue-db`, `catalogue`, `carts`, and `carts-db` Services as `ClusterIP`
 - `frontend` Service with `EXTERNAL-IP` set (filled in by cloud-provider-kind within ~30s)
 
+## Pod identity & least privilege (ServiceAccounts)
+
+Each app runs under its **own ServiceAccount** with **zero API permissions** and **no API token
+mounted** — the `ServiceAccount` is defined at the bottom of each app's own `*.yaml` (after its
+Service) and wired into the Deployment via `serviceAccountName` + `automountServiceAccountToken: false`.
+
+- The apps (Go/Node/Java/MySQL/Mongo) never call the Kubernetes API, so the auto-mounted token under
+  `/var/run/secrets/kubernetes.io/serviceaccount` is only attack surface — removing it means a
+  compromised pod holds **no cluster credential**.
+- A dedicated identity per app means any *future* permission is granted precisely to that app's SA
+  (not the shared `default`, which would leak to **every** pod), and audit logs show which app acted.
+
+Verify the token is gone:
+```bash
+POD=$(kubectl -n mogambo get pod -l app=catalogue -o jsonpath='{.items[0].metadata.name}')
+kubectl -n mogambo get pod "$POD" \
+  -o jsonpath='SA={.spec.serviceAccountName} volumes={.spec.volumes[*].name}{"\n"}'
+# SA=catalogue volumes=          <-- no "kube-api-access-*" volume = no token mounted
+```
+
+Defense in depth: the "automountServiceAccountToken: false" is also set on each pod template 
+(the pod-level setting is authoritative; the SA-level setting keeps the SA safe-by-default
+for any future pod).
+
 ## Reach the frontend
 
 The Service shows an ExternalIP from the kind docker network (e.g. `172.21.0.5`). On WSL2 that IP isn't directly routable — instead, use the **host port** that cloud-provider-kind's envoy proxy publishes:
