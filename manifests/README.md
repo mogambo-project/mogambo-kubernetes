@@ -22,6 +22,7 @@ All five services live in the `mogambo` namespace. Frontend is the only external
 ```bash
 cd ~/mogambo-project/mogambo-kubernetes
 kubectl apply -f namespaces/
+kubectl apply -f pvc/
 kubectl apply -f manifests/
 kubectl apply -f hpa/
 kubectl apply -f vpa/
@@ -66,6 +67,35 @@ kubectl -n mogambo get pod "$POD" \
 Defense in depth: the "automountServiceAccountToken: false" is also set on each pod template 
 (the pod-level setting is authoritative; the SA-level setting keeps the SA safe-by-default
 for any future pod).
+
+## Persistence (database PVCs)
+
+Both databases store their data on a **PersistentVolumeClaim** instead of the pod's ephemeral writable
+layer, so data survives pod restarts/reschedules. The PVCs live in [../pvc/](../pvc/)
+(`catalogue-db-pvc.yaml`, `carts-db-pvc.yaml`); the DB Deployments reference them by `claimName`:
+
+| DB | PVC | Mounted at | Size |
+|----|-----|-----------|------|
+| catalogue-db (MySQL) | `catalogue-db-data` | `/var/lib/mysql` | 1Gi |
+| carts-db (Mongo)     | `carts-db-data`     | `/data/db`       | 1Gi |
+
+- No `storageClassName` → the cluster's **default** StorageClass provisions the volume on demand
+  (on kind that's `local-path`, backed by a directory on the node).
+- The DB Deployments use **`strategy: Recreate`** (not RollingUpdate): a `ReadWriteOnce` volume attaches
+  to only one pod at a time, so the old pod must terminate before the new one starts — otherwise a rolling
+  update deadlocks (the surge pod can't mount the volume the old pod still holds).
+
+Verify + prove persistence:
+```bash
+kubectl get pvc -n mogambo                                        # both Bound
+kubectl -n mogambo exec deploy/carts-db -- sh -c 'echo hi > /data/db/marker'
+kubectl -n mogambo delete pod -l app=carts-db                     # recreated, same PVC re-mounted
+kubectl -n mogambo exec deploy/carts-db -- cat /data/db/marker    # -> hi  (survived the restart)
+```
+
+> **One-time reset:** moving from ephemeral to a fresh PVC starts each DB on an empty volume, so the old
+> in-pod data is gone once (catalogue re-seeds `socksdb` from its image; carts starts empty). It persists
+> from here on. For real HA/ordering the next step is a **StatefulSet** with `volumeClaimTemplates`.
 
 ## Reach the frontend
 
@@ -143,7 +173,7 @@ docker ps --filter "ancestor=envoyproxy/envoy" --format "table {{.Names}}\t{{.Po
 - **Probes** — readiness/liveness so k8s knows when each service is ready
 - **Resource tuning** — adjust requests/limits based on `kubectl top pods -n mogambo`
 - **Secrets and RBAC** — move DB passwords from `value:` literal to `valueFrom: secretKeyRef`
-- **PVC and StatefulSet for databases** — currently data resets on pod restart
+- ~~**PVC for databases**~~ ✅ done — DBs now persist on PVCs (see "Persistence" above). Next: move DBs to a **StatefulSet** with `volumeClaimTemplates` for stable identity/ordering
 - **HPA** — auto-scale frontend, catalogue, carts based on CPU
 - **NetworkPolicy** — e.g: only catalogue should be able to reach catalogue-db
 - **Ingress** — add `mogambo.localtest.me:8090` as an alternative entry point and instead of LoadBalancer

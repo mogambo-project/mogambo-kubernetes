@@ -6,6 +6,8 @@ metadata:
   labels: { app: catalogue-db }
 spec:
   replicas: 1
+  strategy:
+    type: Recreate # a single RWO PVC can't attach to 2 pods; kill old before starting new
   selector:
     matchLabels: { app: catalogue-db }
   template:
@@ -27,6 +29,13 @@ spec:
           resources:
             requests: { cpu: "50m",  memory: "256Mi" }
             limits:   { cpu: "500m", memory: "512Mi" }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql # MySQL stores its data here
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: catalogue-db-data
 ---
 apiVersion: v1
 kind: Service

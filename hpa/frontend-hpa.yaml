@@ -8,8 +8,11 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: frontend
+  # DISABLED: the frontend keeps sessions in memory, so it must NOT run >1 replica without a
+  # shared session store (Redis) — otherwise carts break across pods. Pinning min=max=1 makes
+  # this HPA a no-op (it can never scale). Re-enable (raise maxReplicas) once Redis is in place.
   minReplicas: 1
-  maxReplicas: 5
+  maxReplicas: 1
   metrics:
     - type: Resource
       resource:
