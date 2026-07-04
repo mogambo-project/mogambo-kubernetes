@@ -1,13 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: carts-db
   namespace: mogambo
   labels: { app: carts-db }
 spec:
+  serviceName: carts-db-headless
   replicas: 1
-  strategy:
-    type: Recreate # a single RWO PVC can't attach to 2 pods; kill old before starting new
   selector:
     matchLabels: { app: carts-db }
   template:
@@ -31,11 +30,15 @@ spec:
             limits:   { cpu: "500m", memory: "512Mi" }
           volumeMounts:
             - name: data
-              mountPath: /data/db # MongoDB stores its data here
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: carts-db-data
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
 ---
 apiVersion: v1
 kind: Service
@@ -45,6 +48,20 @@ metadata:
   labels: { app: carts-db }
 spec:
   type: ClusterIP
+  selector: { app: carts-db }
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: carts-db-headless
+  namespace: mogambo
+  labels: { app: carts-db }
+spec:
+  clusterIP: None
   selector: { app: carts-db }
   ports:
     - name: mongo

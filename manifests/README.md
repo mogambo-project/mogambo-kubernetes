@@ -22,7 +22,6 @@ All five services live in the `mogambo` namespace. Frontend is the only external
 ```bash
 cd ~/mogambo-project/mogambo-kubernetes
 kubectl apply -f namespaces/
-kubectl apply -f pvc/
 kubectl apply -f manifests/
 kubectl apply -f hpa/
 kubectl apply -f vpa/
@@ -68,34 +67,38 @@ Defense in depth: the "automountServiceAccountToken: false" is also set on each 
 (the pod-level setting is authoritative; the SA-level setting keeps the SA safe-by-default
 for any future pod).
 
-## Persistence (database PVCs)
+## Databases: StatefulSets + Persistent Storage
 
-Both databases store their data on a **PersistentVolumeClaim** instead of the pod's ephemeral writable
-layer, so data survives pod restarts/reschedules. The PVCs live in [../pvc/](../pvc/)
-(`catalogue-db-pvc.yaml`, `carts-db-pvc.yaml`); the DB Deployments reference them by `claimName`:
+Both databases run as **StatefulSets** (not Deployments), each with a **`volumeClaimTemplates`** entry, so
+the StatefulSet provisions and owns one PVC per pod — data survives pod restarts/reschedules.
 
-| DB | PVC | Mounted at | Size |
-|----|-----|-----------|------|
-| catalogue-db (MySQL) | `catalogue-db-data` | `/var/lib/mysql` | 1Gi |
-| carts-db (Mongo)     | `carts-db-data`     | `/data/db`       | 1Gi |
+| DB | Kind | Per-pod PVC | Mounted at | Size |
+|----|------|-------------|-----------|------|
+| catalogue-db (MySQL) | StatefulSet | `data-catalogue-db-0` | `/var/lib/mysql` | 1Gi |
+| carts-db (Mongo)     | StatefulSet | `data-carts-db-0`     | `/data/db`       | 1Gi |
 
-- No `storageClassName` → the cluster's **default** StorageClass provisions the volume on demand
-  (on kind that's `local-path`, backed by a directory on the node).
-- The DB Deployments use **`strategy: Recreate`** (not RollingUpdate): a `ReadWriteOnce` volume attaches
-  to only one pod at a time, so the old pod must terminate before the new one starts — otherwise a rolling
-  update deadlocks (the surge pod can't mount the volume the old pod still holds).
+Why StatefulSet (vs Deployment + a standalone PVC):
+- **`volumeClaimTemplates`** gives each pod its own stable PVC, tied to its ordinal (`-0`). A pod that
+  restarts re-attaches the *same* volume; scaling up mints a new PVC per pod. (This replaced the old `pvc/` dir.)
+- **Stable identity/DNS**: pods are `catalogue-db-0`, etc., addressable via the **headless Service**
+  (`*-headless`, `clusterIP: None`) named in `serviceName`. Apps still connect through the normal ClusterIP
+  Service (`catalogue-db:3306`, `carts-db:27017`) — unchanged.
+- **No `strategy: Recreate` needed**: a StatefulSet update recreates the *same* ordinal on its *own* PVC,
+  so there's no "two pods fighting over one RWO volume" deadlock that a Deployment+PVC hits.
+
+Note: `volumeClaimTemplates` PVCs are **kept** when you delete the StatefulSet (data is preserved on
+purpose). Wipe them explicitly with `kubectl delete pvc -l app=<db> -n mogambo` if you truly want a reset.
 
 Verify + prove persistence:
 ```bash
-kubectl get pvc -n mogambo                                        # both Bound
-kubectl -n mogambo exec deploy/carts-db -- sh -c 'echo hi > /data/db/marker'
-kubectl -n mogambo delete pod -l app=carts-db                     # recreated, same PVC re-mounted
-kubectl -n mogambo exec deploy/carts-db -- cat /data/db/marker    # -> hi  (survived the restart)
+kubectl get statefulset,pvc -n mogambo                               # STS 1/1 Ready; PVCs Bound
+kubectl -n mogambo exec statefulset/carts-db -- sh -c 'echo hi > /data/db/marker'
+kubectl -n mogambo delete pod carts-db-0                             # recreated as carts-db-0, same PVC
+kubectl -n mogambo exec statefulset/carts-db -- cat /data/db/marker  # -> hi (survived)
 ```
 
-> **One-time reset:** moving from ephemeral to a fresh PVC starts each DB on an empty volume, so the old
-> in-pod data is gone once (catalogue re-seeds `socksdb` from its image; carts starts empty). It persists
-> from here on. For real HA/ordering the next step is a **StatefulSet** with `volumeClaimTemplates`.
+> **One-time reset:** switching to `volumeClaimTemplates` creates fresh PVCs, so each DB starts on an empty
+> volume once (catalogue re-seeds `socksdb`; carts starts empty). It persists from here on.
 
 ## Reach the frontend
 
@@ -173,7 +176,7 @@ docker ps --filter "ancestor=envoyproxy/envoy" --format "table {{.Names}}\t{{.Po
 - **Probes** — readiness/liveness so k8s knows when each service is ready
 - **Resource tuning** — adjust requests/limits based on `kubectl top pods -n mogambo`
 - **Secrets and RBAC** — move DB passwords from `value:` literal to `valueFrom: secretKeyRef`
-- ~~**PVC for databases**~~ ✅ done — DBs now persist on PVCs (see "Persistence" above). Next: move DBs to a **StatefulSet** with `volumeClaimTemplates` for stable identity/ordering
+- ~~**PVC + StatefulSet for databases**~~ ✅ done — DBs are StatefulSets with `volumeClaimTemplates` (see "Databases: StatefulSets" above)
 - **HPA** — auto-scale frontend, catalogue, carts based on CPU
 - **NetworkPolicy** — e.g: only catalogue should be able to reach catalogue-db
 - **Ingress** — add `mogambo.localtest.me:8090` as an alternative entry point and instead of LoadBalancer

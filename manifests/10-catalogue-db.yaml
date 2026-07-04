@@ -1,13 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: catalogue-db
   namespace: mogambo
   labels: { app: catalogue-db }
 spec:
+  serviceName: catalogue-db-headless
   replicas: 1
-  strategy:
-    type: Recreate # a single RWO PVC can't attach to 2 pods; kill old before starting new
   selector:
     matchLabels: { app: catalogue-db }
   template:
@@ -31,19 +30,38 @@ spec:
             limits:   { cpu: "500m", memory: "512Mi" }
           volumeMounts:
             - name: data
-              mountPath: /var/lib/mysql # MySQL stores its data here
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: catalogue-db-data
+              mountPath: /var/lib/mysql
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: catalogue-db
   namespace: mogambo
+  labels: { app: catalogue-db }
 spec:
   type: ClusterIP
+  selector: { app: catalogue-db }
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogue-db-headless
+  namespace: mogambo
+  labels: { app: catalogue-db }
+spec:
+  clusterIP: None
   selector: { app: catalogue-db }
   ports:
     - name: mysql
