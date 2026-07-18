@@ -100,6 +100,40 @@ kubectl -n mogambo exec statefulset/carts-db -- cat /data/db/marker  # -> hi (su
 > **One-time reset:** switching to `volumeClaimTemplates` creates fresh PVCs, so each DB starts on an empty
 > volume once (catalogue re-seeds `socksdb`; carts starts empty). It persists from here on.
 
+## Health probes (startup / readiness / liveness)
+
+Every workload has all three probe types:
+- **startupProbe** — holds readiness/liveness off until the container has *booted*. Protects slow starters
+  (MySQL first-init, Spring Boot ~30s). This is what makes "Ready" mean *actually* ready — and prevents the
+  premature-Ready problem that once let the catalogue DB seed get interrupted.
+- **readinessProbe** — gates Service traffic; a failing pod is removed from endpoints (**not** restarted).
+- **livenessProbe** — restarts a wedged container. Kept **shallow** (TCP/port for apps) so a DB blip can't
+  cascade-restart otherwise-healthy app pods.
+
+| Workload | startup + readiness | liveness (shallow) |
+|----------|---------------------|--------------------|
+| catalogue    | `GET /health:8081`             | `TCP 8081` |
+| carts        | startup `GET /actuator/health/liveness:80`, readiness `GET /actuator/health/readiness:80` | `GET /actuator/health/liveness:80` |
+| frontend     | `GET /:8079`                   | `TCP 8079` |
+| catalogue-db | `mysqladmin ping -h127.0.0.1` (exec, `timeoutSeconds: 5`) | same |
+| carts-db     | `tcpSocket 27017` | same |
+
+Notes:
+- **catalogue-db** uses an **exec** probe: `mysqladmin ping -h 127.0.0.1` forces **TCP**, so MySQL only
+  reports healthy once the real server is up *after* init (not its socket-only init phase). It needs
+  `timeoutSeconds: 5` — the default 1s is too short for the client to connect.
+- **carts-db** uses a **tcpSocket** probe (port open = mongod ready). `mongosh` is a heavy Node process and
+  crash-looped the pod when run as a frequent probe (it takes >1s just to cold-start) — a TCP check is the
+  robust, lightweight choice for Mongo.
+- **Lesson:** for exec probes, mind `timeoutSeconds` (default **1s**); prefer `tcpSocket`/`httpGet` over
+  spawning a heavy client per probe.
+- **carts (Spring Boot Actuator health groups):** instead of the hand-rolled `/health`, carts uses
+  Actuator's availability model. The **liveness** group is `livenessState` only, so a Mongo outage can
+  **never** restart the pod; the **readiness** group is `readinessState + mongo`, so when Mongo is
+  unreachable the pod is pulled from the Service (traffic stops) but is **not** killed.
+- Apps split **liveness** (process/app alive) vs **readiness** (app + its DB) on purpose — for carts that
+  split is expressed cleanly by the two Actuator groups; the others use TCP-liveness + HTTP-readiness.
+
 ## Reach the frontend
 
 The Service shows an ExternalIP from the kind docker network (e.g. `172.21.0.5`). On WSL2 that IP isn't directly routable — instead, use the **host port** that cloud-provider-kind's envoy proxy publishes:
@@ -173,7 +207,7 @@ docker ps --filter "ancestor=envoyproxy/envoy" --format "table {{.Names}}\t{{.Po
 
 - **Helm chart** — replace these 5 nearly-identical YAMLs with one templated chart in `../charts/mogambo/`
 - **Image tag pinning** — replace `:latest` with `:v1.0.0`, set `imagePullPolicy: IfNotPresent`
-- **Probes** — readiness/liveness so k8s knows when each service is ready
+- ~~**Probes** — readiness/liveness so k8s knows when each service is ready~~ ✅ done (startup/readiness/liveness on all 5 — see "Health probes" above)
 - **Resource tuning** — adjust requests/limits based on `kubectl top pods -n mogambo`
 - **Secrets and RBAC** — move DB passwords from `value:` literal to `valueFrom: secretKeyRef`
 - ~~**PVC + StatefulSet for databases**~~ ✅ done — DBs are StatefulSets with `volumeClaimTemplates` (see "Databases: StatefulSets" above)

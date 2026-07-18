@@ -28,6 +28,21 @@ spec:
           resources:
             requests: { cpu: "50m",  memory: "256Mi" }
             limits:   { cpu: "500m", memory: "512Mi" }
+          startupProbe:
+            exec: { command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-uroot"] }
+            timeoutSeconds: 5
+            periodSeconds: 5
+            failureThreshold: 40
+          readinessProbe:
+            exec: { command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-uroot"] }
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            exec: { command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-uroot"] }
+            timeoutSeconds: 5
+            periodSeconds: 15
+            failureThreshold: 3
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql
