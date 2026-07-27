@@ -134,29 +134,33 @@ Notes:
 - Apps split **liveness** (process/app alive) vs **readiness** (app + its DB) on purpose — for carts that
   split is expressed cleanly by the two Actuator groups; the others use TCP-liveness + HTTP-readiness.
 
-## Reach the frontend
+## Reach the frontend (via NGINX Ingress)
 
-The Service shows an ExternalIP from the kind docker network (e.g. `172.21.0.5`). On WSL2 that IP isn't directly routable — instead, use the **host port** that cloud-provider-kind's envoy proxy publishes:
+The frontend Service is `ClusterIP` — it is **not** externally exposed on its own. All external
+traffic enters through the **ingress-nginx controller** (namespace `ingress-nginx`), which routes by
+`Host` header. See [frontend-ingress.yaml](../ingress/frontend-ingress.yaml).
+
+The kind cluster publishes the control-plane node's `:80` → host **`:8090`** (and `:443` → `:8443`),
+and the controller listens there. `*.localtest.me` resolves to `127.0.0.1`, so:
 
 ```bash
-# Find the LB's host port (ephemeral, e.g. 61832)
-docker ps --filter "ancestor=envoyproxy/envoy:v1.33.2" --format '{{.Names}}\t{{.Ports}}'
+# Browser (Windows or WSL):
+http://mogambo.localtest.me:8090/
 
-# Then:
-curl http://localhost:<that-port>/
-# Or in your Windows browser:  http://localhost:<that-port>/
+# curl equivalent (Host header is what the controller matches on):
+curl -H "Host: mogambo.localtest.me" http://localhost:8090/
 ```
 
-One-liner that grabs the port and curls:
-```bash
-PORT=$(docker ps --filter "ancestor=envoyproxy/envoy:v1.33.2" --format '{{.Ports}}' | grep -oE '0\.0\.0\.0:[0-9]+->80/tcp' | head -1 | cut -d: -f2 | cut -d- -f1)
-echo "frontend at http://localhost:$PORT/" && curl -sS http://localhost:$PORT/ | head -5
-```
+Gotchas worth knowing (the "Ingress tax"):
+- An Ingress is **not live the instant you apply it** — the controller must detect the change and
+  reload NGINX. Watch the `ADDRESS` column populate: `kubectl get ingress -n mogambo -w`.
+- A request with the **wrong/missing `Host`** hits the controller's **default backend → 404**. That's
+  not your app failing — it means no rule matched. Routing is entirely host/path based now.
+- Check what the controller actually did: `kubectl logs -n ingress-nginx -l app.kubernetes.io/component=controller`.
 
-If `EXTERNAL-IP` stays `<pending>`, cloud-provider-kind isn't running. Start it:
 ```bash
-nohup ~/.local/bin/cloud-provider-kind > ~/.cpk.log 2>&1 &
-disown
+kubectl get ingress -n mogambo                 # HOSTS + ADDRESS (empty ADDRESS = not reconciled yet)
+kubectl describe ingress frontend -n mogambo   # Rules -> Backends should list the frontend pod IP:8079
 ```
 
 ## Service-to-service DNS (inside the cluster)

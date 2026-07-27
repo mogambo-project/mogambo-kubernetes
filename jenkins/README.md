@@ -272,9 +272,9 @@ So **onboarding a new environment is two steps, no pipeline change:**
 **What makes it work on this Jenkins (already set up):**
 - `kubectl` is baked into the [Jenkins image](../../bootcamp/setup/Dockerfile).
 - Jenkins is attached to the **`kind` docker network** in
-  [docker-compose.yml](../../bootcamp/setup/docker-compose.yml) so it can reach `practice-control-plane:6443`.
+  [docker-compose.yml](../../bootcamp/setup/docker-compose.yml) so it can reach `mogambo-control-plane:6443`.
 - A **`kubeconfig-dev`** Secret-file credential holds the kubeconfig the job uses (in-cluster API
-  address `practice-control-plane:6443`, `insecure-skip-tls-verify` for local). Referenced by ID only —
+  address `mogambo-control-plane:6443`, `insecure-skip-tls-verify` for local). Referenced by ID only —
   never in code.
   **As of the RBAC change, it carries a least-privilege `jenkins-deployer` ServiceAccount token**
   (see [`../rbac/jenkins-deployer.yaml`](../rbac/jenkins-deployer.yaml)) — **not** the kind admin cert.

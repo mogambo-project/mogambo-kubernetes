@@ -9,11 +9,32 @@ Local k8s playground using **kind** (Kubernetes-in-Docker) on WSL Ubuntu. All bi
 kind create cluster --config cluster/kind-config.yaml
 
 # tear down
-kind delete cluster --name practice
+kind delete cluster --name mogambo
 
 # list clusters
 kind get clusters
 ```
+
+## Rebuild from scratch (ordered)
+
+The whole stack is version-controlled, so a clean rebuild is just these steps in order:
+
+```bash
+# 1) cluster — host ports 8090/8443 -> node 80/443, ingress-ready label  (cluster/kind-config.yaml)
+kind create cluster --config cluster/kind-config.yaml
+
+# 2) ingress controller — Helm, pinned chart, kind-specific values  (ingress-nginx/)
+./ingress-nginx/install.sh
+
+# 3) namespaces, app manifests, autoscaling/RBAC, secrets
+kubectl apply -f namespaces/
+kubectl apply -f manifests/
+kubectl apply -f ingress/
+kubectl apply -f hpa/ -f vpa/ -f rbac/
+for f in secrets/*-secret.yaml; do sops -d "$f" | kubectl apply -f -; done
+```
+
+Then reach the app at **http://mogambo.localtest.me:8090/**.
 
 ## Daily commands
 
@@ -29,7 +50,10 @@ kubectx                                 # switch context (when you have multiple
 stern -n ingress-nginx ingress-nginx    # multi-pod log tail
 ```
 
-## NGINX Ingress (already installed via Helm in `ingress-nginx` namespace)
+## NGINX Ingress (reproducible via [`ingress-nginx/`](./ingress-nginx/))
+
+Installed with Helm into the `ingress-nginx` namespace — see **[ingress-nginx/README.md](./ingress-nginx/README.md)**
+for how it's wired to the cluster. Re-run `./ingress-nginx/install.sh` to (re)install.
 
 ```bash
 helm list -n ingress-nginx
@@ -50,11 +74,11 @@ curl http://hello.localtest.me:8090         # browser also works
 
 ```bash
 kubectl get nodes -o wide
-kubectl cordon practice-worker          # mark unschedulable
-kubectl drain practice-worker --ignore-daemonsets --delete-emptydir-data
-kubectl uncordon practice-worker
-kubectl taint nodes practice-worker dedicated=team-a:NoSchedule
-kubectl label nodes practice-worker tier=frontend
+kubectl cordon mogambo-worker          # mark unschedulable
+kubectl drain mogambo-worker --ignore-daemonsets --delete-emptydir-data
+kubectl uncordon mogambo-worker
+kubectl taint nodes mogambo-worker dedicated=team-a:NoSchedule
+kubectl label nodes mogambo-worker tier=frontend
 ```
 
 ## Helm
@@ -108,5 +132,5 @@ sops -d secrets/<name>-secret.yaml | kubectl apply -f -    # decrypt straight in
 ## Reset everything
 
 ```bash
-kind delete cluster --name practice && docker system prune -f
+kind delete cluster --name mogambo && docker system prune -f
 ```
