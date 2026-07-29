@@ -14,4 +14,9 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --wait
 
 kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller
-echo "ingress-nginx $CHART_VERSION ready. Test:  curl -H 'Host: mogambo.localtest.me' http://localhost:8090/"
+
+# Print the REAL host port the controller is reachable on (derived from the kind node's
+# published port mapping), instead of hardcoding it. Host is app-defined, so left as a placeholder.
+NODE="$(kubectl -n ingress-nginx get pod -l app.kubernetes.io/component=controller -o jsonpath='{.items[0].spec.nodeName}')"
+HTTP_PORT="$(docker port "$NODE" 80/tcp 2>/dev/null | head -1 | sed 's/.*://')"
+echo "ingress-nginx $CHART_VERSION ready. Test:  curl -H 'Host: <your-ingress-host>' http://localhost:${HTTP_PORT:-8090}/"
