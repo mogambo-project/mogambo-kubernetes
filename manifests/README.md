@@ -23,7 +23,6 @@ All five services live in the `mogambo` namespace. Frontend is the only external
 cd ~/mogambo-project/mogambo-kubernetes
 kubectl apply -f namespaces/
 kubectl apply -f manifests/
-kubectl apply -f ingress/
 kubectl apply -f hpa/
 kubectl apply -f vpa/
 kubectl apply -f rbac/
@@ -42,7 +41,7 @@ kubectl auth can-i get secrets -n mogambo \
 Expect:
 - All 4 Deployments at `1/1 Ready`
 - `catalogue-db`, `catalogue`, `carts`, and `carts-db` Services as `ClusterIP`
-- `frontend` Service with `EXTERNAL-IP` set (filled in by cloud-provider-kind within ~30s)
+- `frontend` Service as `ClusterIP` (reached through the Gateway — see "Reach the frontend" below)
 
 ## Pod identity & least privilege (ServiceAccounts)
 
@@ -64,7 +63,7 @@ kubectl -n mogambo get pod "$POD" \
 # SA=catalogue volumes=          <-- no "kube-api-access-*" volume = no token mounted
 ```
 
-Defense in depth: the "automountServiceAccountToken: false" is also set on each pod template 
+Defense in depth: the "automountServiceAccountToken: false" is also set on each pod template
 (the pod-level setting is authoritative; the SA-level setting keeps the SA safe-by-default
 for any future pod).
 
@@ -135,33 +134,26 @@ Notes:
 - Apps split **liveness** (process/app alive) vs **readiness** (app + its DB) on purpose — for carts that
   split is expressed cleanly by the two Actuator groups; the others use TCP-liveness + HTTP-readiness.
 
-## Reach the frontend (via NGINX Ingress)
+## Reach the frontend (via Gateway API / Envoy Gateway)
 
-The frontend Service is `ClusterIP` — it is **not** externally exposed on its own. All external
-traffic enters through the **ingress-nginx controller** (namespace `ingress-nginx`), which routes by
-`Host` header. See [frontend-ingress.yaml](../ingress/frontend-ingress.yaml).
+The frontend Service is `ClusterIP` — it is **not** externally exposed on its own. External traffic
+enters through the **Gateway API** edge (Envoy Gateway), which routes by `Host` header. The routing
+resources live in [`../gateway/`](../gateway/) — see **[gateway/README.md](../gateway/README.md)**.
+*(This replaced the earlier NGINX Ingress, which has been removed.)*
 
-The kind cluster publishes the control-plane node's `:80` → host **`:8090`** (and `:443` → `:8443`),
-and the controller listens there. `*.localtest.me` resolves to `127.0.0.1`, so:
+The Envoy data plane binds the control-plane node's `hostPort 80`, which kind maps to host `:8090`
+(`*.localtest.me` resolves to `127.0.0.1`), so it's a stable URL — no cloud-provider-kind, no port-forward:
 
 ```bash
-# Browser (Windows or WSL):
-http://mogambo.localtest.me:8090/
-
-# curl equivalent (Host header is what the controller matches on):
-curl -H "Host: mogambo.localtest.me" http://localhost:8090/
+curl http://mogambo.localtest.me:8090/       # -> 200, Mogambo HTML
+# browser: http://mogambo.localtest.me:8090/
 ```
+See **[gateway/README.md](../gateway/README.md)** for how the hostPort wiring works.
 
-Gotchas worth knowing (the "Ingress tax"):
-- An Ingress is **not live the instant you apply it** — the controller must detect the change and
-  reload NGINX. Watch the `ADDRESS` column populate: `kubectl get ingress -n mogambo -w`.
-- A request with the **wrong/missing `Host`** hits the controller's **default backend → 404**. That's
-  not your app failing — it means no rule matched. Routing is entirely host/path based now.
-- Check what the controller actually did: `kubectl logs -n ingress-nginx -l app.kubernetes.io/component=controller`.
-
+Inspect:
 ```bash
-kubectl get ingress -n mogambo                 # HOSTS + ADDRESS (empty ADDRESS = not reconciled yet)
-kubectl describe ingress frontend -n mogambo   # Rules -> Backends should list the frontend pod IP:8079
+kubectl get gateway,httproute -n mogambo
+kubectl describe httproute frontend -n mogambo   # conditions: Accepted, ResolvedRefs=True
 ```
 
 ## Service-to-service DNS (inside the cluster)
@@ -200,13 +192,8 @@ kubectl exec -it deploy/catalogue-db -n mogambo -- mysql -uroot -p
 | Pod up but `curl` fails | App's bind address is `127.0.0.1`, not `0.0.0.0` | App must listen on all interfaces — fix in app code |
 | catalogue `CrashLoopBackOff`, "can't connect to DB" | App expects a config env var | Uncomment the `env:` block in [20-catalogue.yaml](./20-catalogue.yaml) |
 | catalogue-db `CrashLoopBackOff`, "Database not initialized" | Custom image needs `MYSQL_ROOT_PASSWORD` | Uncomment the `env:` block in [10-catalogue-db.yaml](./10-catalogue-db.yaml) |
-| `EXTERNAL-IP <pending>` forever | cloud-provider-kind not running | See "Reach the frontend" above |
-| `EXTERNAL-IP` set but `curl` hangs | cloud-provider-kind LB container can't bind host port 80 (taken by `setup-frontend-1`) | Curl the LB container's mapped port (`docker ps` shows it) — see below |
-
-If host port 80 is taken, cloud-provider-kind picks a free host port. Find it with:
-```bash
-docker ps --filter "ancestor=envoyproxy/envoy" --format "table {{.Names}}\t{{.Ports}}"
-```
+| `http://mogambo.localtest.me:8090/` fails | Envoy data plane not on the control-plane node, or its hostPort isn't bound | `kubectl get pod -n envoy-gateway-system -o wide -l gateway.envoyproxy.io/owning-gateway-name=mogambo` — must be `Running` on `mogambo-control-plane`. See [../gateway/README.md](../gateway/README.md) |
+| `:8090` returns 404 for every host | wrong/missing `Host` — no HTTPRoute matched | use `mogambo.localtest.me` (the route's hostname) |
 
 ## What's next (don't do yet — wait for the prompt)
 
@@ -218,7 +205,7 @@ docker ps --filter "ancestor=envoyproxy/envoy" --format "table {{.Names}}\t{{.Po
 - ~~**PVC + StatefulSet for databases**~~ ✅ done — DBs are StatefulSets with `volumeClaimTemplates` (see "Databases: StatefulSets" above)
 - **HPA** — auto-scale frontend, catalogue, carts based on CPU
 - **NetworkPolicy** — e.g: only catalogue should be able to reach catalogue-db
-- **Ingress** — add `mogambo.localtest.me:8090` as an alternative entry point and instead of LoadBalancer
+- ~~**Ingress / edge routing**~~ ✅ done — migrated frontend from LoadBalancer → NGINX Ingress → **Gateway API / Envoy Gateway** (see "Reach the frontend" above and [../gateway/](../gateway/))
 - **Add GitOps**
 - **Add Jenkins Jobs**
 

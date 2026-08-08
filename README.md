@@ -23,18 +23,19 @@ The whole stack is version-controlled, so a clean rebuild is just these steps in
 # 1) cluster — host ports 8090/8443 -> node 80/443, ingress-ready label  (cluster/kind-config.yaml)
 kind create cluster --config cluster/kind-config.yaml
 
-# 2) ingress controller — Helm, pinned chart, kind-specific values  (ingress-nginx/)
-./ingress-nginx/install.sh
+# 2) gateway controller — Envoy Gateway (Helm, pinned) — the Gateway API edge  (gateway/)
+./gateway/install.sh
 
-# 3) namespaces, app manifests, autoscaling/RBAC, secrets
+# 3) namespaces, app manifests, gateway routes, autoscaling/RBAC, secrets
 kubectl apply -f namespaces/
 kubectl apply -f manifests/
-kubectl apply -f ingress/
+kubectl apply -f gateway/
 kubectl apply -f hpa/ -f vpa/ -f rbac/
 for f in secrets/*-secret.yaml; do sops -d "$f" | kubectl apply -f -; done
 ```
 
-Then reach the app at **http://mogambo.localtest.me:8090/**.
+Then reach the app through the Gateway at **http://mogambo.localtest.me:8090/**
+(stable hostPort binding — no cloud-provider-kind needed; see **[gateway/README.md](./gateway/README.md)**).
 
 ## Daily commands
 
@@ -47,27 +48,21 @@ kubectl config current-context          # which cluster am I on?
 k9s                                     # TUI — ":pods", ":deploy", ":svc", ":ing", ":nodes"
 kubens kube-system                      # switch default namespace
 kubectx                                 # switch context (when you have multiple)
-stern -n ingress-nginx ingress-nginx    # multi-pod log tail
+stern -n envoy-gateway-system .         # multi-pod log tail (gateway controller + data plane)
 ```
 
-## NGINX Ingress (reproducible via [`ingress-nginx/`](./ingress-nginx/))
+## Edge routing: Gateway API (Envoy Gateway)
 
-Installed with Helm into the `ingress-nginx` namespace — see **[ingress-nginx/README.md](./ingress-nginx/README.md)**
-for how it's wired to the cluster. Re-run `./ingress-nginx/install.sh` to (re)install.
+The mogambo frontend is served via **Gateway API / Envoy Gateway** — see
+**[gateway/README.md](./gateway/README.md)** for the full wiring and how to reach it.
+(The earlier NGINX Ingress was migrated away and `ingress-nginx` uninstalled.)
 
 ```bash
-helm list -n ingress-nginx
-kubectl -n ingress-nginx get pods
-kubectl -n ingress-nginx logs -l app.kubernetes.io/component=controller
+helm list -n envoy-gateway-system
+kubectl get gatewayclass,gateway,httproute -A
+kubectl -n envoy-gateway-system get pods
 ```
 
-Test it:
-```bash
-kubectl create deployment hello --image=nginx
-kubectl expose deployment hello --port=80
-kubectl create ingress hello --class=nginx --rule="hello.localtest.me/*=hello:80"
-curl http://hello.localtest.me:8090         # browser also works
-```
 `*.localtest.me` resolves to `127.0.0.1` automatically — no `/etc/hosts` edits.
 
 ## Node management practice

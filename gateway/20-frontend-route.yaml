@@ -1,0 +1,24 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: frontend
+  namespace: mogambo
+  labels: { app: frontend }
+spec:
+  parentRefs:
+    - name: mogambo
+  hostnames:
+    - mogambo.localtest.me
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: 80
+
+
+# HTTPRoute — the ROUTING RULES (host/path -> Service). Owned by the app team, lives in the app's
+# namespace, and ATTACHES to the Gateway via parentRefs. This is the direct replacement for the
+# old Ingress object — but every field here is typed and validated (no vendor annotations).

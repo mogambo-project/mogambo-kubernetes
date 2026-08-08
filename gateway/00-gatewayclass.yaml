@@ -1,0 +1,16 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: custom-proxy
+    namespace: envoy-gateway-system
+
+# GatewayClass — "which controller implements Gateways of this class" (the Gateway API analogue
+# of IngressClass). Cluster-scoped, installed once. Envoy Gateway watches for this controllerName.
+# Portability note: to move to a different implementation (NGINX Gateway Fabric, Istio, ...) you
+# swap ONLY this controllerName — the Gateway and HTTPRoute below stay byte-for-byte identical.

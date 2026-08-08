@@ -1,0 +1,21 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: mogambo
+  namespace: mogambo
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+
+
+# Gateway — the LISTENER (ports/protocols/TLS the edge accepts). Owned by the platform/infra
+# role. Creating it makes Envoy Gateway provision a data plane (an Envoy Deployment + Service in
+# the envoy-gateway-system namespace) dedicated to this Gateway.
+# This is the Gateway API replacement for what the ingress-nginx *controller* did — except here
+# the listener is an explicit, typed object you own, not a shared controller install.
