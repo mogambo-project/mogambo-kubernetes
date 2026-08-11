@@ -1,0 +1,23 @@
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+      - name: default-ipv4-ippool
+        blockSize: 26
+        cidr: 10.244.0.0/16
+        encapsulation: VXLANCrossSubnet
+        natOutgoing: Enabled
+        nodeSelector: all()
+---
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}
+
+# Calico configuration (via the Tigera operator). The IP pool CIDR MUST match the kind
+# podSubnet in ../cluster/kind-config.yaml (10.244.0.0/16). VXLAN needs no BGP peering,
+# which is what you want on a single-host kind/docker network.

@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-catalogue
+  namespace: mogambo
+spec:
+  podSelector:
+    matchLabels: { app: catalogue }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: frontend }
+      ports:
+        - port: 8081
+
+# catalogue accepts ingress only from the frontend, on 8081.

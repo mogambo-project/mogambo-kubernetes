@@ -1,0 +1,18 @@
+# carts-db (Mongo) accepts ingress ONLY from the carts app, on 27017.
+# NOTE: carts-db uses a tcpSocket:27017 probe (kubelet -> pod). If probes fail after applying this,
+# a node/host allow is added to permit kubelet health checks (see network-policies/README.md).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-carts-db
+  namespace: mogambo
+spec:
+  podSelector:
+    matchLabels: { app: carts-db }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: carts }
+      ports:
+        - port: 27017

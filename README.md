@@ -17,25 +17,36 @@ kind get clusters
 
 ## Rebuild from scratch (ordered)
 
-The whole stack is version-controlled, so a clean rebuild is just these steps in order:
+The whole stack is version-controlled, so a clean rebuild is these steps in order:
 
 ```bash
-# 1) cluster — host ports 8090/8443 -> node 80/443, ingress-ready label  (cluster/kind-config.yaml)
+# 1) cluster — disableDefaultCNI (Calico instead of kindnet), host ports 8090/8443, ingress-ready label
 kind create cluster --config cluster/kind-config.yaml
 
-# 2) gateway controller — Envoy Gateway (Helm, pinned) — the Gateway API edge  (gateway/)
-./gateway/install.sh
+# 2) CNI — Calico (enforces NetworkPolicy). Nodes are NotReady until this runs.  (calico/)
+./calico/install.sh
 
-# 3) namespaces, app manifests, gateway routes, autoscaling/RBAC, secrets
+# 3) controllers (installed via Helm / manifests, not from this repo's kubectl apply):
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl patch deploy metrics-server -n kube-system --type=json \
+  -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+helm upgrade --install vpa fairwinds-stable/vpa --version 4.11.0 -n vpa --create-namespace --wait   # needs `helm repo add fairwinds-stable https://charts.fairwinds.com/stable`
+./gateway/install.sh          # Envoy Gateway (Gateway API edge)
+
+# 4) app — secrets BEFORE manifests (DB pods need their envFrom creds)
 kubectl apply -f namespaces/
+for f in secrets/*-secret.yaml; do sops -d "$f" | kubectl apply -f -; done
 kubectl apply -f manifests/
 kubectl apply -f gateway/
 kubectl apply -f hpa/ -f vpa/ -f rbac/
-for f in secrets/*-secret.yaml; do sops -d "$f" | kubectl apply -f -; done
+kubectl apply -f network-policies/          # zero-trust ingress (enforced by Calico)
 ```
 
 Then reach the app through the Gateway at **http://mogambo.localtest.me:8090/**
 (stable hostPort binding — no cloud-provider-kind needed; see **[gateway/README.md](./gateway/README.md)**).
+
+> **Note:** metrics-server + VPA are installed imperatively above (not yet folded into a single script).
+> The CNI is now **Calico** (see [calico/](./calico/)) so **[network-policies/](./network-policies/)** are enforced.
 
 ## Daily commands
 

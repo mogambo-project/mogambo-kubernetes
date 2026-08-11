@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-catalogue-db
+  namespace: mogambo
+spec:
+  podSelector:
+    matchLabels: { app: catalogue-db }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: catalogue }
+      ports:
+        - port: 3306
+
+# catalogue-db (MySQL) accepts ingress ONLY from the catalogue app, on 3306.
+# This is the headline rule: nothing else in the cluster can reach the catalogue database.
+# (catalogue-db's health probe is an exec `mysqladmin` INSIDE the pod, so it's unaffected by this.)
