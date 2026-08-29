@@ -1,0 +1,74 @@
+# Alert rules for mogambo. The prometheus-operator loads any PrometheusRule labelled release=monitoring.
+# NOTE: Alertmanager is disabled (to save RAM), so these EVALUATE and show in Prometheus -> Alerts and
+# in the dashboard "Alerts" panel (the ALERTS metric), but they don't send notifications. Enable
+# Alertmanager in values.yaml if you want email/Slack.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mogambo-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: mogambo.rules
+      rules:
+        - alert: MogamboPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="mogambo"}[15m]) > 3
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "Pod {{ $labels.pod }} is restarting a lot"
+            description: "{{ $labels.pod }} restarted >3 times in the last 15m."
+
+        - alert: MogamboHighCPU
+          expr: |
+            sum by(pod)(rate(container_cpu_usage_seconds_total{namespace="mogambo",container!=""}[5m]))
+            / sum by(pod)(kube_pod_container_resource_limits{namespace="mogambo",resource="cpu"}) > 0.9
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "High CPU on {{ $labels.pod }}"
+            description: "{{ $labels.pod }} is using >90% of its CPU limit for 5m."
+
+        - alert: MogamboMemoryNearLimit
+          expr: |
+            sum by(pod)(container_memory_working_set_bytes{namespace="mogambo",container!=""})
+            / sum by(pod)(kube_pod_container_resource_limits{namespace="mogambo",resource="memory"}) > 0.9
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "Memory near limit on {{ $labels.pod }}"
+            description: "{{ $labels.pod }} is using >90% of its memory limit for 5m (OOM risk)."
+
+        - alert: MogamboDeploymentDegraded
+          expr: kube_deployment_status_replicas_available{namespace="mogambo"} < kube_deployment_spec_replicas{namespace="mogambo"}
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Deployment {{ $labels.deployment }} degraded"
+            description: "available replicas < desired for 10m."
+
+        - alert: MogamboPodPending
+          expr: kube_pod_status_phase{namespace="mogambo",phase="Pending"} == 1
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Pod {{ $labels.pod }} stuck Pending"
+            description: "{{ $labels.pod }} has been Pending for 10m."
+
+        - alert: MogamboPodNotReady
+          expr: min by(pod)(kube_pod_container_status_ready{namespace="mogambo"}) == 0
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "Pod {{ $labels.pod }} not ready"
+            description: "readiness has been failing for 10m."
+
+        - alert: NodeNotReady
+          expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+          for: 5m
+          labels: { severity: critical }
+          annotations:
+            summary: "Node {{ $labels.node }} NotReady"
+            description: "{{ $labels.node }} has not been Ready for 5m."

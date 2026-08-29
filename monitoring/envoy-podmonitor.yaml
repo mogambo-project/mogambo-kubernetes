@@ -1,0 +1,24 @@
+# Tell Prometheus to scrape the Envoy Gateway data-plane proxies, which expose rich HTTP metrics
+# (request counts, response-code classes, latency histograms) on port 19001 at /stats/prometheus.
+# This is the source for the RED (Rate/Errors/Duration) panels — it sees every request to the frontend.
+#
+# The `release: monitoring` label is what makes the kube-prometheus-stack Prometheus select it
+# (its podMonitorSelector matches that label).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: envoy-gateway-proxies
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  namespaceSelector:
+    matchNames: [envoy-gateway-system]
+  selector:
+    matchLabels:
+      app.kubernetes.io/managed-by: envoy-gateway
+      app.kubernetes.io/component: proxy
+  podMetricsEndpoints:
+    - port: metrics          # the named container port 19001 on the Envoy pods
+      path: /stats/prometheus
+      interval: 30s

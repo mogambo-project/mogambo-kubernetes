@@ -1,0 +1,39 @@
+# Trimmed kube-prometheus-stack for a memory-limited kind/WSL cluster (~3 GB free).
+# Full defaults would OOM this VM, so: no Alertmanager, short retention, single replicas, capped RAM.
+alertmanager:
+  enabled: false                 # no alerting needed locally
+
+prometheus:
+  prometheusSpec:
+    retention: 6h                # ephemeral emptyDir storage; short window keeps RAM/disk small
+    replicas: 1
+    resources:
+      requests: { cpu: "100m", memory: "300Mi" }
+      limits:   { memory: "800Mi" }
+
+grafana:
+  adminPassword: "admin"         # local only — change if you ever expose this
+  defaultDashboardsEnabled: true # ships the standard Kubernetes dashboards
+  persistence:
+    enabled: false               # dashboards are provisioned, so ephemeral is fine
+  resources:
+    requests: { cpu: "50m", memory: "128Mi" }
+    limits:   { memory: "256Mi" }
+  grafana.ini:
+    server:
+      root_url: "http://grafana.localtest.me:8090/"   # correct redirects behind the Gateway
+
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: "20m", memory: "32Mi" }
+    limits:   { memory: "64Mi" }
+
+kube-state-metrics:
+  resources:
+    requests: { cpu: "20m", memory: "64Mi" }
+    limits:   { memory: "128Mi" }
+
+prometheusOperator:
+  resources:
+    requests: { cpu: "50m", memory: "100Mi" }
+    limits:   { memory: "200Mi" }

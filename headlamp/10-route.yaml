@@ -1,0 +1,25 @@
+# Exposes Headlamp through the SHARED mogambo Gateway (Envoy Gateway) — no separate ingress.
+# The route lives in the headlamp namespace and attaches cross-namespace to the Gateway in the
+# mogambo namespace (allowed because that Gateway has allowedRoutes.namespaces.from: All).
+# Backend is same-namespace, so no ReferenceGrant is needed.
+#
+# Reach it at:  http://headlamp.localtest.me:8090/
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: headlamp
+  namespace: headlamp
+spec:
+  parentRefs:
+    - name: mogambo
+      namespace: mogambo
+  hostnames:
+    - headlamp.localtest.me
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: headlamp
+          port: 80

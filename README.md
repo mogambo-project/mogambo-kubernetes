@@ -32,6 +32,7 @@ kubectl patch deploy metrics-server -n kube-system --type=json \
   -p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
 helm upgrade --install vpa fairwinds-stable/vpa --version 4.11.0 -n vpa --create-namespace --wait   # needs `helm repo add fairwinds-stable https://charts.fairwinds.com/stable`
 ./gateway/install.sh          # Envoy Gateway (Gateway API edge)
+./headlamp/install.sh         # web console (optional)
 
 # 4) app — secrets BEFORE manifests (DB pods need their envFrom creds)
 kubectl apply -f namespaces/
@@ -40,6 +41,7 @@ kubectl apply -f manifests/
 kubectl apply -f gateway/
 kubectl apply -f hpa/ -f vpa/ -f rbac/
 kubectl apply -f network-policies/          # zero-trust ingress (enforced by Calico)
+kubectl apply -f headlamp/00-admin-rbac.yaml -f headlamp/10-route.yaml   # optional
 ```
 
 Then reach the app through the Gateway at **http://mogambo.localtest.me:8090/**
