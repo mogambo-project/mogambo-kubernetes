@@ -1,0 +1,56 @@
+# Grafana Alloy as a single log collector (Deployment, 1 replica).
+# It discovers every pod, tails its container logs via the Kubernetes API, attaches
+# Kubernetes labels (namespace / pod / container / app), and pushes them to Loki.
+# Because we read logs through the API (not per-node files), ONE instance covers the whole
+# cluster — a DaemonSet would make each node tail every pod and duplicate the logs.
+# No application changes required.
+controller:
+  type: deployment
+  replicas: 1
+
+alloy:
+  resources:
+    requests: { cpu: "50m", memory: "128Mi" }
+    limits:   { memory: "256Mi" }
+  # River pipeline: discover pods -> relabel to nice labels -> tail logs -> write to Loki.
+  configMap:
+    content: |-
+      // Discover all pods in the cluster.
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // Turn pod metadata into the labels we want on every log line.
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+      }
+
+      // Tail container logs straight from the Kubernetes API (no host log mounts needed).
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      // Ship everything to Loki (SingleBinary service, gateway disabled).
+      loki.write "default" {
+        endpoint {
+          url = "http://loki.observability.svc:3100/loki/api/v1/push"
+        }
+      }

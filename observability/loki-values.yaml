@@ -1,0 +1,59 @@
+# Loki in SingleBinary mode — the minimal footprint for a memory-limited kind/WSL cluster.
+# Everything not needed for a single-node local store is switched off (caches, gateway, canary,
+# minio). Storage is the pod filesystem (ephemeral emptyDir) with a short retention window.
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false            # single-tenant local dev; no X-Scope-OrgID needed
+  commonConfig:
+    replication_factor: 1        # single binary => no replication
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  limits_config:
+    retention_period: 72h        # keep logs short so ephemeral disk stays small
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+  # keep the query/ingest footprint tiny
+  querier:
+    max_concurrent: 2
+
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true                # small local-path PVC (Loki's root fs is read-only, needs a writable /var/loki)
+    size: 2Gi
+    storageClass: standard       # kind's default local-path provisioner; deleted with the cluster
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { memory: "512Mi" }
+
+# --- turn OFF everything a single-binary local install does not need ---
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
+gateway:
+  enabled: false                 # write/read straight to the `loki` service on :3100
+minio:
+  enabled: false
+
+# scalable-mode components stay at zero (SingleBinary uses none of them)
+backend:  { replicas: 0 }
+read:     { replicas: 0 }
+write:    { replicas: 0 }

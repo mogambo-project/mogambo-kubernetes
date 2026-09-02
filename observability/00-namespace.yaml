@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/part-of: mogambo
+# Home for the logs+traces backends (Loki, Tempo) and their collectors (Alloy, Beyla).
+# Metrics already live in the `monitoring` namespace (kube-prometheus-stack); this keeps
+# the two new observability pillars together and separate from the app workloads.

@@ -1,0 +1,54 @@
+# Registers Loki (logs) and Tempo (traces) as Grafana datasources.
+# The kube-prometheus-stack Grafana runs a sidecar that auto-loads any ConfigMap in the
+# `monitoring` namespace labelled grafana_datasource=1 — so this adds the datasources with
+# ZERO changes to the monitoring Helm release.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-ds-loki
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  loki-datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        access: proxy
+        uid: loki
+        url: http://loki.observability.svc:3100
+        jsonData:
+          # Turn a trace id found in a log line into a clickable link to the Tempo trace.
+          derivedFields:
+            - name: TraceID
+              matcherRegex: '(?:trace_id|traceID|traceId)"?[:=]"?(\w+)'
+              url: '$${__value.raw}'
+              datasourceUid: tempo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-ds-tempo
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  tempo-datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        access: proxy
+        uid: tempo
+        url: http://tempo.observability.svc:3200
+        jsonData:
+          # From a trace span, jump to the matching logs in Loki.
+          tracesToLogsV2:
+            datasourceUid: loki
+            filterByTraceID: true
+            spanStartTimeShift: '-5m'
+            spanEndTimeShift: '5m'
+          # Draw the service graph / node map from trace data.
+          serviceMap:
+            datasourceUid: prometheus

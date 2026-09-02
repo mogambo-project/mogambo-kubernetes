@@ -1,0 +1,31 @@
+# Grafana Tempo in single-binary (monolithic) mode — minimal trace store for local dev.
+# Storage is the pod filesystem (ephemeral); OTLP receivers are enabled so Envoy and Beyla
+# can push spans straight to Tempo (its distributor acts as the collector — no separate
+# OpenTelemetry Collector needed for a local setup).
+tempo:
+  # Accept spans over OTLP (gRPC :4317 and HTTP :4318) — the modern standard wire format.
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+  retention: 72h                 # keep traces short so ephemeral disk stays small
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+  resources:
+    # Bumped: Beyla currently traces cluster-wide, so span bursts spiked past 512Mi and OOMKilled
+    # Tempo. Headroom fix; scoping Beyla to the mogambo namespace would let this come back down.
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { memory: "1Gi" }
+
+persistence:
+  enabled: false                 # emptyDir; local traces are disposable
+
+# Expose the OTLP ports on the Service so Envoy/Beyla can reach them.
+service:
+  type: ClusterIP

@@ -16,6 +16,8 @@ spec:
   template:
     metadata:
       labels: { app: frontend }
+      annotations:
+        instrumentation.opentelemetry.io/inject-nodejs: "mogambo"   # OTel auto-instrumentation -> Tempo
     spec:
       serviceAccountName: frontend
       automountServiceAccountToken: false

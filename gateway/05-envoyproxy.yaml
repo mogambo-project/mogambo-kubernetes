@@ -4,6 +4,15 @@ metadata:
   name: custom-proxy
   namespace: envoy-gateway-system
 spec:
+  # Edge tracing: emit an OpenTelemetry span for every request entering the mesh, sent to
+  # Tempo's OTLP endpoint. This gives per-route latency traces at the gateway with no app changes.
+  telemetry:
+    tracing:
+      samplingRate: 100          # trace everything (local dev; lower this in production)
+      provider:
+        type: OpenTelemetry
+        host: tempo.observability.svc.cluster.local
+        port: 4317               # Tempo OTLP gRPC
   provider:
     type: Kubernetes
     kubernetes:

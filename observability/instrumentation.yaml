@@ -1,0 +1,24 @@
+# Instrumentation CR — tells the OpenTelemetry Operator how to configure the auto-injected
+# agents: where to send traces (Tempo OTLP), how to propagate context (W3C tracecontext, so
+# spans link into one tree across Envoy -> frontend -> carts), and how to sample.
+# Lives in the `mogambo` namespace; the inject-* pod annotations reference it by name.
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: mogambo
+  namespace: mogambo
+spec:
+  exporter:
+    endpoint: http://tempo.observability.svc:4318   # Tempo OTLP HTTP (agents' default protocol)
+  propagators:
+    - tracecontext     # W3C traceparent — links Envoy edge span to app spans
+    - baggage
+  sampler:
+    type: parentbased_always_on   # honour the gateway's trace, sample every root (local dev)
+  env:
+    # Traces go to Tempo; metrics stay in Prometheus and logs in Loki. Turn these off so the
+    # agents don't spam Tempo with metric/log payloads it rejects.
+    - name: OTEL_METRICS_EXPORTER
+      value: "none"
+    - name: OTEL_LOGS_EXPORTER
+      value: "none"

@@ -1,0 +1,16 @@
+# OpenTelemetry Operator — injects language auto-instrumentation agents into pods via an
+# annotation (no application code changes). This is the WSL2-friendly way to get in-service
+# traces (Beyla's eBPF approach can't run on the WSL2 kernel).
+#
+# Use the operator's own self-signed webhook certs so we don't need cert-manager.
+admissionWebhooks:
+  certManager:
+    enabled: false
+  autoGenerateCert:
+    enabled: true
+
+manager:
+  # Agents send OTLP straight to Tempo; we don't deploy a collector. Keep the manager small.
+  resources:
+    requests: { cpu: "50m", memory: "128Mi" }
+    limits:   { memory: "256Mi" }

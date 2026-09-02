@@ -16,6 +16,8 @@ spec:
   template:
     metadata:
       labels: { app: carts }
+      annotations:
+        instrumentation.opentelemetry.io/inject-java: "mogambo"   # OTel auto-instrumentation -> Tempo
     spec:
       serviceAccountName: carts
       automountServiceAccountToken: false
