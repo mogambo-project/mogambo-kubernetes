@@ -25,6 +25,9 @@ spec:
         - name: frontend
           image: andriohanania/frontend:latest
           imagePullPolicy: Always
+          env:
+            - name: SESSION_REDIS
+              value: "true"
           ports:
             - containerPort: 8079
               name: http
