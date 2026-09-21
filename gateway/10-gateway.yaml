@@ -16,7 +16,7 @@ spec:
             matchExpressions:
               - key: kubernetes.io/metadata.name   # auto-set on every namespace by k8s
                 operator: In
-                values: [mogambo, headlamp, monitoring]   # add a namespace here to grant it the shared edge
+                values: [mogambo, headlamp, monitoring, argocd]   # add a namespace here to grant it the shared edge
 
 
 # Gateway — the LISTENER (ports/protocols/TLS the edge accepts). Owned by the platform/infra

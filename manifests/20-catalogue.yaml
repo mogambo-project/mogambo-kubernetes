@@ -21,8 +21,10 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: catalogue
-          image: andriohanania/catalogue:latest
-          imagePullPolicy: Always
+          # Immutable digest — the DEVELOPER sets which version runs here (roll forward or back),
+          # commits, and ArgoCD deploys it. Not auto-changed by CI. (CI only builds+pushes tags.)
+          image: andriohanania/catalogue@sha256:a3ae2980eba3a6b42a436b3692cc685ad67b210e34a8cc0e2896841911a66d2e
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081
               name: http

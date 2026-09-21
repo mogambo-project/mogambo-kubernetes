@@ -23,8 +23,10 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: frontend
-          image: andriohanania/frontend:latest
-          imagePullPolicy: Always
+          # Immutable digest — the DEVELOPER sets which version runs here (roll forward or back),
+          # commits, and ArgoCD deploys it. Not auto-changed by CI. (CI only builds+pushes tags.)
+          image: andriohanania/frontend@sha256:f78905d6b29c33a70d5af3cc37d869f9a467d8d5a852835f8a8dc38b40ba3b69
+          imagePullPolicy: IfNotPresent
           env:
             - name: SESSION_REDIS
               value: "true"

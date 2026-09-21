@@ -1,0 +1,20 @@
+# GitOps for the NetworkPolicies (the cluster firewall rules). Keeping these in Git means a
+# deleted/loosened policy is auto-restored (security drift protection).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mogambo-netpol
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/mogambo-project/mogambo-kubernetes.git
+    targetRevision: master
+    path: network-policies
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mogambo
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true

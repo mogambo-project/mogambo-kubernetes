@@ -23,8 +23,10 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: carts
-          image: andriohanania/carts:latest
-          imagePullPolicy: Always
+          # Immutable digest — the DEVELOPER sets which version runs here (roll forward or back),
+          # commits, and ArgoCD deploys it. Not auto-changed by CI. (CI only builds+pushes tags.)
+          image: andriohanania/carts@sha256:35266b150d5b29306a8568e59c1ad5590b53a67e0011f0ea9ecec6b8954bd0ab
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
               name: http

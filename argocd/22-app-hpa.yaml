@@ -1,0 +1,20 @@
+# GitOps for the HPAs. This governs the SCALING POLICY objects (min/max/target) — not the pods.
+# Drift on min/max (e.g. someone `kubectl edit hpa`) is reverted to Git.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mogambo-hpa
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/mogambo-project/mogambo-kubernetes.git
+    targetRevision: master
+    path: hpa
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mogambo
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
