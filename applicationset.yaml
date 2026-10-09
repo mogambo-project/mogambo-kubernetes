@@ -1,0 +1,55 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: mogambo
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    # Auto-discover every unit: one Application per values-*/values.yaml in this repo.
+    - git:
+        repoURL: https://github.com/mogambo-project/mogambo-kubernetes.git
+        revision: master
+        files:
+          - path: "values-*/values.yaml"
+      # enabled is OPTIONAL and defaults to TRUE: a unit deploys unless its values.yaml
+      # explicitly sets  enabled: "false".  (NotIn also matches files that omit the key.)
+      selector:
+        matchExpressions:
+          - key: enabled
+            operator: NotIn
+            values: ["false"]
+  template:
+    metadata:
+      name: "{{.app}}-{{.versionLine}}"     # e.g. frontend-1-0
+    spec:
+      project: default
+      # Multi-source: the shared chart lives in mogambo-charts; the values live here.
+      sources:
+        - repoURL: https://github.com/mogambo-project/mogambo-charts.git
+          targetRevision: main
+          path: app
+          helm:
+            valueFiles:
+              - "$values/{{.path.path}}/values.yaml"
+        - repoURL: https://github.com/mogambo-project/mogambo-kubernetes.git
+          targetRevision: master
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: mogambo
+      syncPolicy:
+        automated:
+          prune: false        # removing a unit won't auto-delete its live objects (delete by hand)
+          selfHeal: true      # revert manual kubectl drift back to Git
+      ignoreDifferences:
+        - group: apps
+          kind: Deployment
+          jsonPointers:
+            - /spec/replicas  # HPA owns the replica count
+
+# The one bootstrap object. It reads every values-*/values.yaml and generates one
+# normal ArgoCD Application per enabled unit (shown in the UI, self-heal on).
+# Add a unit  = add a values-<svc>-<ver>/ folder.    Disable = enabled: "false".
+# Ship a build = bump image.tag/digest in that unit's values.yaml.
+# This file is just a manifest you kubectl apply once to the argocd namespace.

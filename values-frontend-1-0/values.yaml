@@ -1,0 +1,58 @@
+# ======================================================================
+# frontend, version line 1.0   ->   objects named "frontend-1-0"
+# One file = one deployable unit. Edit this file and ArgoCD rolls it.
+# ======================================================================
+
+# enabled: "false"         # OPTIONAL — omit to deploy (default true); set "false" to stop deploying this unit.
+
+app: frontend
+versionLine: "1-0"
+kind: Deployment
+
+image:
+  repository: andriohanania/frontend
+  # Built by Jenkins from branch 1.0 (package.json 1.0.0 + build #1).
+  tag: "1.0.0-1"
+  # digest: "sha256:f78905d6b29c33a70d5af3cc37d869f9a467d8d5a852835f8a8dc38b40ba3b69"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  automount: false
+
+podAnnotations:
+  instrumentation.opentelemetry.io/inject-nodejs: "mogambo"   # OTel auto-instrumentation -> Tempo
+
+containerPort: 8079
+portName: http
+
+env:
+  - name: SESSION_REDIS
+    value: "true"
+
+resources:
+  requests: { cpu: "20m",  memory: "64Mi" }
+  limits:   { cpu: "200m", memory: "256Mi" }
+
+probes:
+  readiness:
+    httpGet: { path: /, port: 8079 }
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    tcpSocket: { port: 8079 }
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 80
+  targetPort: 8079
+
+hpa:
+  enabled: true
+  min: 2
+  max: 4
+  targetCPU: 80

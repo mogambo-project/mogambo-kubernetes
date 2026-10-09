@@ -1,0 +1,49 @@
+# ======================================================================
+# catalogue, version line 1.0   ->   objects named "catalogue-1-0"
+# ======================================================================
+# enabled: "false"         # OPTIONAL — omit to deploy (default true); set "false" to stop deploying.
+
+app: catalogue
+versionLine: "1-0"
+kind: Deployment
+
+image:
+  repository: andriohanania/catalogue
+  # Built by Jenkins from branch 1.0 (VERSION 1.0.0 + build #1).
+  tag: "1.0.0-1"
+  # digest: "sha256:a3ae2980eba3a6b42a436b3692cc685ad67b210e34a8cc0e2896841911a66d2e"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  automount: false
+
+containerPort: 8081
+portName: http
+
+resources:
+  requests: { cpu: "20m",  memory: "64Mi" }
+  limits:   { cpu: "200m", memory: "256Mi" }
+
+probes:
+  readiness:
+    httpGet: { path: /health, port: 8081 }
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    tcpSocket: { port: 8081 }
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 80
+  targetPort: 8081
+
+hpa:
+  enabled: true
+  min: 1
+  max: 4
+  targetCPU: 70
