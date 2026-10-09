@@ -27,7 +27,7 @@ spec:
       # Multi-source: the shared chart lives in mogambo-charts; the values live here.
       sources:
         - repoURL: https://github.com/mogambo-project/mogambo-charts.git
-          targetRevision: main
+          targetRevision: master
           path: app
           helm:
             valueFiles:
