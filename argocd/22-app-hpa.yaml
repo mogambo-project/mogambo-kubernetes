@@ -1,5 +1,3 @@
-# GitOps for the HPAs. This governs the SCALING POLICY objects (min/max/target) — not the pods.
-# Drift on min/max (e.g. someone `kubectl edit hpa`) is reverted to Git.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -18,3 +16,6 @@ spec:
     automated:
       prune: false
       selfHeal: true
+
+# GitOps for the HPAs. This governs the SCALING POLICY objects (min/max/target) — not the pods.
+# Drift on min/max (e.g. someone `kubectl edit hpa`) is reverted to Git.

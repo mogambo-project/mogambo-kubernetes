@@ -1,5 +1,3 @@
-# GitOps for the NetworkPolicies (the cluster firewall rules). Keeping these in Git means a
-# deleted/loosened policy is auto-restored (security drift protection).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -18,3 +16,6 @@ spec:
     automated:
       prune: false
       selfHeal: true
+
+# GitOps for the NetworkPolicies (the cluster firewall rules). Keeping these in Git means a
+# deleted/loosened policy is auto-restored (security drift protection).

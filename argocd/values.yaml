@@ -1,7 +1,3 @@
-# Argo CD trimmed for a memory-limited kind/WSL cluster.
-# We keep the UI (server) but drop the components we don't need locally (SSO/Dex, ApplicationSet,
-# notifications), and run the API server in "insecure" mode so it serves plain HTTP behind the
-# shared Envoy gateway (the gateway is the edge; no need for Argo to also do TLS internally).
 global:
   domain: argocd.localtest.me
 
@@ -34,3 +30,8 @@ redis:
   resources:
     requests: { cpu: "20m", memory: "64Mi" }
     limits:   { memory: "128Mi" }
+
+# Argo CD trimmed for a memory-limited kind/WSL cluster.
+# We keep the UI (server) but drop the components we don't need locally (SSO/Dex, ApplicationSet,
+# notifications), and run the API server in "insecure" mode so it serves plain HTTP behind the
+# shared Envoy gateway (the gateway is the edge; no need for Argo to also do TLS internally).

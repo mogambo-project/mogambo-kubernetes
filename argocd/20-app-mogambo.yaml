@@ -1,13 +1,5 @@
-# The GitOps definition: keep the mogambo APP layer (manifests/) in sync with Git.
-# Git (github.com/mogambo-project/mogambo-kubernetes, path manifests/) is the source of truth;
-# Argo compares it against the live `mogambo` namespace.
-#
-# Auto-sync is ON (verified Git == cluster before enabling):
-#   selfHeal: true  -> revert any manual kubectl change back to Git (Git is the source of truth)
-#   prune:    false -> conservative: Argo won't DELETE resources you remove from Git (delete by hand
-#                      if you really mean to). Flip to true for full GitOps once you trust it.
 apiVersion: argoproj.io/v1alpha1
-kind: Application
+kind: Application # Application as a Resource
 metadata:
   name: mogambo-apps
   namespace: argocd
@@ -24,9 +16,17 @@ spec:
     automated:
       prune: false
       selfHeal: true
-  # HPAs own the replica count of these Deployments — never let Argo revert it.
   ignoreDifferences:
     - group: apps
       kind: Deployment
       jsonPointers:
         - /spec/replicas
+
+# The GitOps definition: keep the mogambo APP layer (manifests/) in sync with Git.
+# Git (github.com/mogambo-project/mogambo-kubernetes, path manifests/) is the source of truth;
+# Argo compares it against the live `mogambo` namespace.
+# Auto-sync is ON (verified Git == cluster before enabling):
+#   selfHeal: true  -> revert any manual kubectl change back to Git (Git is the source of truth)
+#   prune:    false -> conservative: Argo won't DELETE resources you remove from Git (delete by hand
+#                      if you really mean to). Flip to true for full GitOps once you trust it.
+# HPAs own the replica count of these Deployments — never let Argo revert it.
