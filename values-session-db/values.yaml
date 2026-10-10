@@ -1,0 +1,41 @@
+# ======================================================================
+# session-db — Redis shared session store (singleton; no version, no PVC)
+# ======================================================================
+app: session-db
+fullnameOverride: session-db
+kind: Deployment
+
+image:
+  repository: redis
+  tag: "7-alpine"
+  pullPolicy: IfNotPresent
+
+args: ["--save", "", "--appendonly", "no"]   # in-memory only, no disk persistence
+
+serviceAccount:
+  create: true
+  automount: false
+
+containerPort: 6379
+portName: redis
+
+resources:
+  requests: { cpu: "20m", memory: "32Mi" }
+  limits:   { memory: "128Mi" }
+
+probes:
+  readiness:
+    tcpSocket: { port: 6379 }
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    tcpSocket: { port: 6379 }
+    initialDelaySeconds: 10
+    periodSeconds: 15
+    failureThreshold: 3
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 6379
+  targetPort: 6379

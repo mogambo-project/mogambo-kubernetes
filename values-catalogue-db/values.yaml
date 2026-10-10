@@ -1,0 +1,56 @@
+# ======================================================================
+# catalogue-db — MySQL (singleton StatefulSet; keeps PVC data-catalogue-db-0)
+# ======================================================================
+app: catalogue-db
+fullnameOverride: catalogue-db
+kind: StatefulSet
+replicas: 1
+
+image:
+  repository: andriohanania/catalogue-db
+  tag: "1.0.0-1"            # built by Jenkins from catalogue branch 1.0 (same seed data; won't re-init a populated volume)
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  automount: false
+
+containerPort: 3306
+portName: mysql
+
+envFrom:
+  - secretRef: { name: catalogue-db-credentials }   # existing secret (SOPS-managed in secrets/)
+
+resources:
+  requests: { cpu: "50m",  memory: "256Mi" }
+  limits:   { cpu: "500m", memory: "512Mi" }
+
+probes:
+  startup:
+    exec: { command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-uroot"] }
+    timeoutSeconds: 5
+    periodSeconds: 5
+    failureThreshold: 40
+  readiness:
+    exec: { command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-uroot"] }
+    timeoutSeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    exec: { command: ["mysqladmin", "ping", "-h", "127.0.0.1", "-uroot"] }
+    timeoutSeconds: 5
+    periodSeconds: 15
+    failureThreshold: 3
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 3306
+  targetPort: 3306
+  headless: true
+
+persistence:
+  enabled: true
+  size: 1Gi
+  mountPath: /var/lib/mysql
+  accessModes: ["ReadWriteOnce"]

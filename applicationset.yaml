@@ -21,7 +21,7 @@ spec:
             values: ["false"]
   template:
     metadata:
-      name: "{{.app}}-{{.versionLine}}"     # e.g. frontend-1-0
+      name: '{{ trimPrefix "values-" .path.basename }}'   # folder values-frontend-1-0 -> frontend-1-0; values-catalogue-db -> catalogue-db
     spec:
       project: default
       # Multi-source: the shared chart lives in mogambo-charts; the values live here.

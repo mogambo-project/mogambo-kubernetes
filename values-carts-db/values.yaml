@@ -1,0 +1,53 @@
+# ======================================================================
+# carts-db — MongoDB (singleton StatefulSet; keeps PVC data-carts-db-0)
+# ======================================================================
+app: carts-db
+fullnameOverride: carts-db
+kind: StatefulSet
+replicas: 1
+
+image:
+  repository: mongo
+  tag: "6"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  automount: false
+
+containerPort: 27017
+portName: mongo
+
+envFrom:
+  - secretRef: { name: carts-db-credentials }   # existing secret (SOPS-managed in secrets/)
+
+resources:
+  requests: { cpu: "50m",  memory: "256Mi" }
+  limits:   { cpu: "500m", memory: "512Mi" }
+
+probes:
+  startup:
+    tcpSocket: { port: 27017 }
+    periodSeconds: 5
+    failureThreshold: 30
+  readiness:
+    tcpSocket: { port: 27017 }
+    periodSeconds: 10
+    failureThreshold: 3
+  liveness:
+    tcpSocket: { port: 27017 }
+    periodSeconds: 15
+    failureThreshold: 3
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 27017
+  targetPort: 27017
+  headless: true
+
+persistence:
+  enabled: true
+  size: 1Gi
+  mountPath: /data/db
+  accessModes: ["ReadWriteOnce"]
