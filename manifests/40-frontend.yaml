@@ -1,51 +1,8 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: frontend
-  namespace: mogambo
-  labels: { app: frontend }
-spec:
-  replicas: 1
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
-  selector:
-    matchLabels: { app: frontend }
-  template:
-    metadata:
-      labels: { app: frontend }
-      annotations:
-        instrumentation.opentelemetry.io/inject-nodejs: "mogambo"   # OTel auto-instrumentation -> Tempo
-    spec:
-      serviceAccountName: frontend
-      automountServiceAccountToken: false
-      containers:
-        - name: frontend
-          # Immutable digest — the DEVELOPER sets which version runs here (roll forward or back),
-          # commits, and ArgoCD deploys it. Not auto-changed by CI. (CI only builds+pushes tags.)
-          image: andriohanania/frontend@sha256:f78905d6b29c33a70d5af3cc37d869f9a467d8d5a852835f8a8dc38b40ba3b69
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: SESSION_REDIS
-              value: "true"
-          ports:
-            - containerPort: 8079
-              name: http
-          resources:
-            requests: { cpu: "20m",  memory: "64Mi" }
-            limits:   { cpu: "200m", memory: "256Mi" }
-          readinessProbe:
-            httpGet: { path: /, port: 8079 }
-            periodSeconds: 10
-            failureThreshold: 3
-          livenessProbe:
-            tcpSocket: { port: 8079 }
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            failureThreshold: 3
----
+# Stable, version-agnostic Service for frontend — the fixed name the gateway and
+# other services use. It selects `app: frontend`, so it routes to whichever
+# frontend VERSION is running (frontend-1-0 today). The Deployment, ServiceAccount,
+# and HPA now come from the Helm chart via the ApplicationSet (values-frontend-1-0/).
+# When multiple versions run at once, edge/version routing (Envoy) takes over here.
 apiVersion: v1
 kind: Service
 metadata:
@@ -58,11 +15,3 @@ spec:
     - name: http
       port: 80
       targetPort: 8079
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: frontend
-  namespace: mogambo
-  labels: { app: frontend }
-automountServiceAccountToken: false

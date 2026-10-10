@@ -1,46 +1,7 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: catalogue
-  namespace: mogambo
-  labels: { app: catalogue }
-spec:
-  replicas: 1
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
-  selector:
-    matchLabels: { app: catalogue }
-  template:
-    metadata:
-      labels: { app: catalogue }
-    spec:
-      serviceAccountName: catalogue
-      automountServiceAccountToken: false
-      containers:
-        - name: catalogue
-          # Immutable digest — the DEVELOPER sets which version runs here (roll forward or back),
-          # commits, and ArgoCD deploys it. Not auto-changed by CI. (CI only builds+pushes tags.)
-          image: andriohanania/catalogue@sha256:a3ae2980eba3a6b42a436b3692cc685ad67b210e34a8cc0e2896841911a66d2e
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 8081
-              name: http
-          resources:
-            requests: { cpu: "20m",  memory: "64Mi" }
-            limits:   { cpu: "200m", memory: "256Mi" }
-          readinessProbe:
-            httpGet: { path: /health, port: 8081 }
-            periodSeconds: 10
-            failureThreshold: 3
-          livenessProbe:
-            tcpSocket: { port: 8081 }
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            failureThreshold: 3
----
+# Stable, version-agnostic Service for catalogue — the fixed name callers use
+# (frontend -> http://catalogue). Selects `app: catalogue`, so it routes to
+# whichever catalogue VERSION is running (catalogue-1-0 today). Deployment/SA/HPA
+# now come from the Helm chart via the ApplicationSet (values-catalogue-1-0/).
 apiVersion: v1
 kind: Service
 metadata:
@@ -53,11 +14,3 @@ spec:
     - name: http
       port: 80
       targetPort: 8081
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: catalogue
-  namespace: mogambo
-  labels: { app: catalogue }
-automountServiceAccountToken: false

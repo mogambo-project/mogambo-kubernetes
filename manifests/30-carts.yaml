@@ -1,51 +1,7 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: carts
-  namespace: mogambo
-  labels: { app: carts }
-spec:
-  replicas: 1
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
-  selector:
-    matchLabels: { app: carts }
-  template:
-    metadata:
-      labels: { app: carts }
-      annotations:
-        instrumentation.opentelemetry.io/inject-java: "mogambo"   # OTel auto-instrumentation -> Tempo
-    spec:
-      serviceAccountName: carts
-      automountServiceAccountToken: false
-      containers:
-        - name: carts
-          # Immutable digest — the DEVELOPER sets which version runs here (roll forward or back),
-          # commits, and ArgoCD deploys it. Not auto-changed by CI. (CI only builds+pushes tags.)
-          image: andriohanania/carts@sha256:35266b150d5b29306a8568e59c1ad5590b53a67e0011f0ea9ecec6b8954bd0ab
-          imagePullPolicy: IfNotPresent
-          ports:
-            - containerPort: 80
-              name: http
-          resources:
-            requests: { cpu: "50m",  memory: "256Mi" }
-            limits:   { cpu: "500m", memory: "512Mi" }
-          startupProbe:
-            httpGet: { path: /actuator/health/liveness, port: 80 }
-            periodSeconds: 5
-            failureThreshold: 40
-          readinessProbe:
-            httpGet: { path: /actuator/health/readiness, port: 80 }
-            periodSeconds: 10
-            failureThreshold: 3
-          livenessProbe:
-            httpGet: { path: /actuator/health/liveness, port: 80 }
-            periodSeconds: 15
-            failureThreshold: 3
----
+# Stable, version-agnostic Service for carts — the fixed name callers use
+# (frontend -> http://carts). Selects `app: carts`, so it routes to whichever
+# carts VERSION is running (carts-1-0 today). Deployment/SA/HPA now come from the
+# Helm chart via the ApplicationSet (values-carts-1-0/).
 apiVersion: v1
 kind: Service
 metadata:
@@ -58,11 +14,3 @@ spec:
     - name: http
       port: 80
       targetPort: 80
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: carts
-  namespace: mogambo
-  labels: { app: carts }
-automountServiceAccountToken: false
