@@ -6,22 +6,67 @@ configs:
     server.insecure: true            # serve HTTP so the HTTPRoute can proxy to it
   cm:
     url: http://argocd.localtest.me:8090   # external URL of the UI (links/redirects)
+    # Allow helm value files to use the helm-secrets schemes (so `-f secrets://...` is permitted).
+    helm.valuesFileSchemes: >-
+      secrets, secrets+literal, sops, https, http
 
 dex:
   enabled: false                     # no SSO — local admin login only
 notifications:
   enabled: false
 applicationSet:
-  enabled: false
+  enabled: true                      # REQUIRED: the ApplicationSet that generates all our apps
 
 server:
   resources:
     requests: { cpu: "50m", memory: "128Mi" }
     limits:   { memory: "256Mi" }
+
 repoServer:
   resources:
     requests: { cpu: "50m", memory: "128Mi" }
-    limits:   { memory: "256Mi" }
+    limits:   { memory: "512Mi" }    # headroom for the helm-secrets/sops subprocess
+  # --- helm-secrets (SOPS) support: decrypt per-folder secrets.yaml at render time ---
+  env:
+    - name: HELM_PLUGINS
+      value: /custom-tools/helm-plugins/
+    - name: HELM_SECRETS_SOPS_PATH
+      value: /custom-tools/sops
+    - name: HELM_SECRETS_VALUES_ALLOW_ABSOLUTE_PATH
+      value: "true"
+    - name: HELM_SECRETS_VALUES_ALLOW_PATH_TRAVERSAL
+      value: "true"
+    - name: SOPS_AGE_KEY_FILE
+      value: /helm-secrets-private-keys/keys.txt
+  volumes:
+    - name: custom-tools
+      emptyDir: {}
+    - name: helm-secrets-private-keys
+      secret:
+        secretName: sops-age
+  volumeMounts:
+    - mountPath: /custom-tools
+      name: custom-tools
+    - mountPath: /helm-secrets-private-keys
+      name: helm-secrets-private-keys
+  initContainers:
+    - name: download-tools
+      image: alpine:3.20
+      command: [sh, -ec]
+      args:
+        - |
+          mkdir -p /custom-tools/helm-plugins
+          wget -qO- https://github.com/jkroepke/helm-secrets/releases/download/v4.6.2/helm-secrets.tar.gz \
+            | tar -C /custom-tools/helm-plugins -xzf -
+          # helm 3.15+ rejects plugins that set BOTH platformCommand and command -> drop the legacy top-level command
+          sed -i '/^command:/d' /custom-tools/helm-plugins/helm-secrets/plugin.yaml
+          wget -qO /custom-tools/sops \
+            https://github.com/getsops/sops/releases/download/v3.13.1/sops-v3.13.1.linux.amd64
+          chmod +x /custom-tools/sops
+      volumeMounts:
+        - mountPath: /custom-tools
+          name: custom-tools
+
 controller:
   resources:
     requests: { cpu: "100m", memory: "256Mi" }
@@ -32,6 +77,6 @@ redis:
     limits:   { memory: "128Mi" }
 
 # Argo CD trimmed for a memory-limited kind/WSL cluster.
-# We keep the UI (server) but drop the components we don't need locally (SSO/Dex, ApplicationSet,
-# notifications), and run the API server in "insecure" mode so it serves plain HTTP behind the
-# shared Envoy gateway (the gateway is the edge; no need for Argo to also do TLS internally).
+# SSO/Dex + notifications are off; ApplicationSet is ON (it generates our apps).
+# The repo-server carries helm-secrets + sops (via an init container) and the age key
+# (Secret: sops-age) so it can decrypt each unit's secrets.yaml during Helm rendering.

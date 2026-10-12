@@ -3,6 +3,7 @@
 # ======================================================================
 app: catalogue-db
 fullnameOverride: catalogue-db
+hasSecrets: "true"        # ApplicationSet adds secrets://.../secrets.yaml (SOPS) to the Helm value files
 kind: StatefulSet
 replicas: 1
 

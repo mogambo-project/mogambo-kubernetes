@@ -32,6 +32,9 @@ spec:
           helm:
             valueFiles:
               - "$values/{{.path.path}}/values.yaml"
+              {{- if eq .hasSecrets "true" }}
+              - "secrets://$values/{{.path.path}}/secrets.yaml"   # SOPS-decrypted by helm-secrets in the repo-server
+              {{- end }}
         - repoURL: https://github.com/mogambo-project/mogambo-kubernetes.git
           targetRevision: master
           ref: values
