@@ -20,7 +20,7 @@ data:
           - |
             export HELM_CACHE_HOME=/tmp/.hc HELM_CONFIG_HOME=/tmp/.hcfg HELM_DATA_HOME=/tmp/.hd
             CHART=$(mktemp -d)
-            helm pull oci://registry-1.docker.io/andriohanania/app --version 0.1.0 --untar --untardir "$CHART" >/dev/null 2>&1
+            helm pull oci://registry-1.docker.io/andriohanania/app --version "${ARGOCD_ENV_CHART_VERSION:-0.1.0}" --untar --untardir "$CHART" >/dev/null 2>&1
             SEC=""
             if [ -f secrets.yaml ]; then
               /custom-tools/sops -d secrets.yaml > "$CHART/dec.yaml"

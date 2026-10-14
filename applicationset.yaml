@@ -32,6 +32,11 @@ spec:
         path: '{{.path.path}}'
         plugin:
           name: mogambo-v1.0
+          env:
+            # The ONE place the chart version is set (same for all units). Bump this + kubectl apply
+            # this file to roll everything onto a new chart published by the mogambo-charts CI.
+            - name: CHART_VERSION
+              value: "0.1.0-1"
       destination:
         server: https://kubernetes.default.svc
         namespace: mogambo
