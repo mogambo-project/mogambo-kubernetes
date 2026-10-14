@@ -54,3 +54,13 @@ persistence:
   size: 1Gi
   mountPath: /var/lib/mysql
   accessModes: ["ReadWriteOnce"]
+
+vpa:
+  enabled: true
+  updateMode: "Initial"      # set requests at pod creation (safe for a singleton DB; no HPA conflict)
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed: { cpu: 50m, memory: 256Mi }
+        maxAllowed: { cpu: "2", memory: 4Gi }
+        controlledResources: [cpu, memory]

@@ -51,3 +51,13 @@ persistence:
   size: 1Gi
   mountPath: /data/db
   accessModes: ["ReadWriteOnce"]
+
+vpa:
+  enabled: true
+  updateMode: "Off"          # recommendations only
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "*"
+        minAllowed: { cpu: 50m, memory: 256Mi }
+        maxAllowed: { cpu: "2", memory: 4Gi }
+        controlledResources: [cpu, memory]

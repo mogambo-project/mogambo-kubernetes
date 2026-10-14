@@ -36,7 +36,7 @@ spec:
             # The ONE place the chart version is set (same for all units). Bump this + kubectl apply
             # this file to roll everything onto a new chart published by the mogambo-charts CI.
             - name: CHART_VERSION
-              value: "0.1.0-1"
+              value: "0.1.0-2"
       destination:
         server: https://kubernetes.default.svc
         namespace: mogambo
