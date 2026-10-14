@@ -1,0 +1,31 @@
+# App-of-apps ROOT Application.
+# Apply this ONCE (kubectl apply). After that, ArgoCD manages the ApplicationSet + the CMP
+# ConfigMap itself: edit applicationset.yaml or cmp-plugin.yaml in Git, push, and it auto-applies
+# — no more manual `kubectl apply`.
+#
+# It watches the argocd/ folder but, via directory.include, picks up ONLY those two manifests
+# (so it ignores values.yaml, README.md, root-app.yaml itself, etc.).
+#
+# Note: a change to cmp-plugin.yaml (the plugin *logic*) auto-applies but needs a repo-server
+# restart to take effect (subPath mount). CHART_VERSION lives in applicationset.yaml and takes
+# effect immediately on sync.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mogambo-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/mogambo-project/mogambo-kubernetes.git
+    targetRevision: master
+    path: argocd
+    directory:
+      include: '{applicationset.yaml,cmp-plugin.yaml}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: false       # don't auto-delete these core objects if a file is removed from Git
+      selfHeal: true      # revert manual kubectl drift back to Git
