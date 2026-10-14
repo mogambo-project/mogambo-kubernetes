@@ -6,9 +6,6 @@ configs:
     server.insecure: true            # serve HTTP so the HTTPRoute can proxy to it
   cm:
     url: http://argocd.localtest.me:8090   # external URL of the UI (links/redirects)
-    # Allow helm value files to use the helm-secrets schemes (so `-f secrets://...` is permitted).
-    helm.valuesFileSchemes: >-
-      secrets, secrets+literal, sops, https, http
 
 dex:
   enabled: false                     # no SSO — local admin login only
@@ -25,47 +22,57 @@ server:
 repoServer:
   resources:
     requests: { cpu: "50m", memory: "128Mi" }
-    limits:   { memory: "512Mi" }    # headroom for the helm-secrets/sops subprocess
-  # --- helm-secrets (SOPS) support: decrypt per-folder secrets.yaml at render time ---
-  env:
-    - name: HELM_PLUGINS
-      value: /custom-tools/helm-plugins/
-    - name: HELM_SECRETS_SOPS_PATH
-      value: /custom-tools/sops
-    - name: HELM_SECRETS_VALUES_ALLOW_ABSOLUTE_PATH
-      value: "true"
-    - name: HELM_SECRETS_VALUES_ALLOW_PATH_TRAVERSAL
-      value: "true"
-    - name: SOPS_AGE_KEY_FILE
-      value: /helm-secrets-private-keys/keys.txt
+    limits:   { memory: "512Mi" }
+  # Extra volumes for the CMP sidecar (var-files + plugins are chart defaults, reused).
   volumes:
-    - name: custom-tools
+    - name: custom-tools                 # holds the sops binary (init container populates it)
       emptyDir: {}
-    - name: helm-secrets-private-keys
+    - name: helm-secrets-private-keys    # the age private key (Secret: sops-age)
       secret:
         secretName: sops-age
-  volumeMounts:
-    - mountPath: /custom-tools
-      name: custom-tools
-    - mountPath: /helm-secrets-private-keys
-      name: helm-secrets-private-keys
+    - name: cmp-plugin                   # the ConfigManagementPlugin definition
+      configMap:
+        name: cmp-plugin
+    - name: cmp-tmp
+      emptyDir: {}
+  # Download sops into the shared volume for the sidecar.
   initContainers:
     - name: download-tools
       image: alpine:3.20
       command: [sh, -ec]
       args:
         - |
-          mkdir -p /custom-tools/helm-plugins
-          wget -qO- https://github.com/jkroepke/helm-secrets/releases/download/v4.6.2/helm-secrets.tar.gz \
-            | tar -C /custom-tools/helm-plugins -xzf -
-          # helm 3.15+ rejects plugins that set BOTH platformCommand and command -> drop the legacy top-level command
-          sed -i '/^command:/d' /custom-tools/helm-plugins/helm-secrets/plugin.yaml
-          wget -qO /custom-tools/sops \
-            https://github.com/getsops/sops/releases/download/v3.13.1/sops-v3.13.1.linux.amd64
+          wget -qO /custom-tools/sops https://github.com/getsops/sops/releases/download/v3.13.1/sops-v3.13.1.linux.amd64
           chmod +x /custom-tools/sops
+          chmod -R a+rwX /custom-tools
       volumeMounts:
         - mountPath: /custom-tools
           name: custom-tools
+  # The CMP sidecar: pulls the OCI chart, sops-decrypts secrets.yaml, renders (single-source).
+  extraContainers:
+    - name: cmp
+      command: ["/var/run/argocd/argocd-cmp-server"]
+      image: quay.io/argoproj/argocd:v3.5.2
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+      env:
+        - name: SOPS_AGE_KEY_FILE
+          value: /helm-secrets-private-keys/keys.txt
+      volumeMounts:
+        - mountPath: /var/run/argocd
+          name: var-files
+        - mountPath: /home/argocd/cmp-server/plugins
+          name: plugins
+        - mountPath: /home/argocd/cmp-server/config/plugin.yaml
+          subPath: plugin.yaml
+          name: cmp-plugin
+        - mountPath: /custom-tools
+          name: custom-tools
+        - mountPath: /helm-secrets-private-keys
+          name: helm-secrets-private-keys
+        - mountPath: /tmp
+          name: cmp-tmp
 
 controller:
   resources:
@@ -76,7 +83,8 @@ redis:
     requests: { cpu: "20m", memory: "64Mi" }
     limits:   { memory: "128Mi" }
 
-# Argo CD trimmed for a memory-limited kind/WSL cluster.
-# SSO/Dex + notifications are off; ApplicationSet is ON (it generates our apps).
-# The repo-server carries helm-secrets + sops (via an init container) and the age key
-# (Secret: sops-age) so it can decrypt each unit's secrets.yaml during Helm rendering.
+# Argo CD trimmed for a memory-limited kind/WSL cluster. ApplicationSet is ON.
+# The repo-server runs a CMP sidecar ("mogambo") that renders each unit SINGLE-SOURCE:
+# pull the shared chart from OCI (andriohanania/app), sops-decrypt the unit's secrets.yaml
+# (age key from Secret sops-age), then `helm template`. This is what lets per-folder SOPS
+# secrets work (ArgoCD multi-source $values can't expand inside helm-secrets' secrets://).

@@ -21,23 +21,17 @@ spec:
             values: ["false"]
   template:
     metadata:
-      name: '{{ trimPrefix "values-" .path.basename }}'   # folder values-frontend-1-0 -> frontend-1-0; values-catalogue-db -> catalogue-db
+      name: '{{ trimPrefix "values-" .path.basename }}'   # values-frontend-1-0 -> frontend-1-0; values-catalogue-db -> catalogue-db
     spec:
       project: default
-      # Multi-source: the shared chart lives in mogambo-charts; the values live here.
-      sources:
-        - repoURL: https://github.com/mogambo-project/mogambo-charts.git
-          targetRevision: master
-          path: app
-          helm:
-            valueFiles:
-              - "$values/{{.path.path}}/values.yaml"
-              {{- if eq .hasSecrets "true" }}
-              - "secrets://$values/{{.path.path}}/secrets.yaml"   # SOPS-decrypted by helm-secrets in the repo-server
-              {{- end }}
-        - repoURL: https://github.com/mogambo-project/mogambo-kubernetes.git
-          targetRevision: master
-          ref: values
+      # SINGLE source = the unit's values folder. The "mogambo" CMP sidecar pulls the shared
+      # chart from OCI (andriohanania/app), sops-decrypts secrets.yaml if present, and renders.
+      source:
+        repoURL: https://github.com/mogambo-project/mogambo-kubernetes.git
+        targetRevision: master
+        path: '{{.path.path}}'
+        plugin:
+          name: mogambo-v1.0
       destination:
         server: https://kubernetes.default.svc
         namespace: mogambo
@@ -51,8 +45,6 @@ spec:
           jsonPointers:
             - /spec/replicas  # HPA owns the replica count
 
-# The one bootstrap object. It reads every values-*/values.yaml and generates one
-# normal ArgoCD Application per enabled unit (shown in the UI, self-heal on).
-# Add a unit  = add a values-<svc>-<ver>/ folder.    Disable = enabled: "false".
-# Ship a build = bump image.tag/digest in that unit's values.yaml.
-# This file is just a manifest you kubectl apply once to the argocd namespace.
+# The one bootstrap object. Reads every values-*/values.yaml and generates one normal
+# ArgoCD Application per enabled unit (UI + self-heal). Rendering is done by the "mogambo"
+# CMP sidecar: pull OCI chart -> sops-decrypt secrets.yaml (if present) -> helm template.

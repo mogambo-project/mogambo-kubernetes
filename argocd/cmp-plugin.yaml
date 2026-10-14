@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cmp-plugin
+  namespace: argocd
+data:
+  plugin.yaml: |
+    apiVersion: argoproj.io/v1alpha1
+    kind: ConfigManagementPlugin
+    metadata:
+      name: mogambo
+    spec:
+      version: v1.0
+      # Runs with CWD = the unit's values folder (values.yaml [+ secrets.yaml]).
+      # Pulls the shared chart from OCI, decrypts secrets.yaml if present, renders.
+      generate:
+        command:
+          - sh
+          - -c
+          - |
+            export HELM_CACHE_HOME=/tmp/.hc HELM_CONFIG_HOME=/tmp/.hcfg HELM_DATA_HOME=/tmp/.hd
+            CHART=$(mktemp -d)
+            helm pull oci://registry-1.docker.io/andriohanania/app --version 0.1.0 --untar --untardir "$CHART" >/dev/null 2>&1
+            SEC=""
+            if [ -f secrets.yaml ]; then
+              /custom-tools/sops -d secrets.yaml > "$CHART/dec.yaml"
+              SEC="-f $CHART/dec.yaml"
+            fi
+            helm template "$ARGOCD_APP_NAME" "$CHART/app" -f values.yaml $SEC -n "$ARGOCD_APP_NAMESPACE" --include-crds
+      discover:
+        fileName: "values.yaml"

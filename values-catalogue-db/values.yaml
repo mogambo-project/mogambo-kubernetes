@@ -3,7 +3,6 @@
 # ======================================================================
 app: catalogue-db
 fullnameOverride: catalogue-db
-hasSecrets: "true"        # ApplicationSet adds secrets://.../secrets.yaml (SOPS) to the Helm value files
 kind: StatefulSet
 replicas: 1
 
@@ -20,7 +19,7 @@ containerPort: 3306
 portName: mysql
 
 envFrom:
-  - secretRef: { name: catalogue-db-credentials }   # existing secret (SOPS-managed in secrets/)
+  - secretRef: { name: catalogue-db }   # chart-rendered from this folder's secrets.yaml (SOPS, decrypted by the CMP)
 
 resources:
   requests: { cpu: "50m",  memory: "256Mi" }
