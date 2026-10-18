@@ -12,7 +12,7 @@ kind: Deployment
 image:
   repository: andriohanania/frontend
   # Built by Jenkins from branch 1.0 (package.json 1.0.0 + build #1).
-  tag: "1.0.0-1"
+  tag: "1.0.0-5"
   # digest: "sha256:f78905d6b29c33a70d5af3cc37d869f9a467d8d5a852835f8a8dc38b40ba3b69"
   pullPolicy: IfNotPresent
 
@@ -27,8 +27,9 @@ containerPort: 8079
 portName: http
 
 env:
-  - name: SESSION_REDIS
-    value: "true"
+  SESSION_REDIS: "true"
+  CATALOGUE_URL: "http://catalogue-1-0"
+  CARTS_URL:     "http://carts-1-0"
 
 resources:
   requests: { cpu: "20m",  memory: "64Mi" }
@@ -50,6 +51,12 @@ service:
   type: ClusterIP
   port: 80
   targetPort: 8079
+
+route:                       # this version is the one exposed at the edge
+  enabled: true
+  gateway: mogambo
+  host: mogambo.localtest.me
+  path: /
 
 hpa:
   enabled: true
