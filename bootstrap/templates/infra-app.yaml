@@ -1,0 +1,25 @@
+# App-of-apps for the platform TOOLS, which live in the SEPARATE mogambo-platform repo.
+# Planted by the bootstrap install, then owned by Argo CD. It discovers every Application by the
+# convention "<tool>/app/*.yaml" — so each tool is a self-contained folder (its config + an app/
+# subfolder of Applications), and onboarding a tool is one new folder in the platform repo.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mogambo-infra
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.platformRepoURL | quote }}
+    targetRevision: {{ .Values.targetRevision | quote }}
+    path: "."
+    directory:
+      recurse: true
+      include: '*/app/*.yaml'   # only the Application files; each tool's config sits beside its app/ folder
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: false        # removing a tool's folder won't auto-delete its live objects (delete by hand)
+      selfHeal: true

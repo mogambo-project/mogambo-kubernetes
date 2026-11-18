@@ -1,0 +1,113 @@
+# ======================================================================
+# mogambo bootstrap — THE one place the control plane is configured.
+#
+#   helm dependency build bootstrap/
+#   helm install mogambo bootstrap/ -n argocd --create-namespace
+#
+# brings up Argo CD (the argo-cd values below), plants the root app-of-apps,
+# and plants the Application that makes Argo CD manage itself. Everything else
+# (the app units + all infra tools) is then reconciled from Git by Argo CD.
+# ======================================================================
+
+# Git repo that holds this deployment (app CD + ArgoCD core). The root app-of-apps and the
+# self-management Application both read these (templated into them).
+repoURL: https://github.com/mogambo-project/mogambo-kubernetes.git
+targetRevision: master
+
+# Platform repo — the infra tools (gateway, monitoring, observability, headlamp, network-policies),
+# each a self-contained folder with its config + an app/ subfolder of Applications. The mogambo-infra
+# app-of-apps reads this repo. (A separate repo = the platform-team ownership model.)
+platformRepoURL: https://github.com/mogambo-project/mogambo-platform.git
+
+# ----------------------------------------------------------------------
+# Argo CD (upstream argo-cd chart) values. Trimmed for a memory-limited
+# kind/WSL cluster. The repo-server runs a CMP sidecar ("mogambo") that
+# renders each unit SINGLE-SOURCE: pull the shared chart from OCI
+# (andriohanania/app), sops-decrypt the unit's secrets.yaml (age key from
+# Secret sops-age), then `helm template`.
+# ----------------------------------------------------------------------
+argo-cd:
+  global:
+    domain: argocd.localtest.me
+
+  configs:
+    params:
+      server.insecure: true            # serve HTTP so the HTTPRoute can proxy to it
+    cm:
+      url: http://argocd.localtest.me:8090   # external URL of the UI (links/redirects)
+
+  dex:
+    enabled: false                     # no SSO — local admin login only
+  notifications:
+    enabled: false
+  applicationSet:
+    enabled: true                      # REQUIRED: the ApplicationSet that generates all our apps
+
+  server:
+    resources:
+      requests: { cpu: "50m", memory: "128Mi" }
+      limits:   { memory: "256Mi" }
+
+  repoServer:
+    resources:
+      requests: { cpu: "50m", memory: "128Mi" }
+      limits:   { memory: "512Mi" }
+    # Extra volumes for the CMP sidecar (var-files + plugins are chart defaults, reused).
+    volumes:
+      - name: custom-tools                 # holds the sops binary (init container populates it)
+        emptyDir: {}
+      - name: helm-secrets-private-keys    # the age private key (Secret: sops-age)
+        secret:
+          secretName: sops-age
+      - name: cmp-plugin                   # the ConfigManagementPlugin definition
+        configMap:
+          name: cmp-plugin
+      - name: cmp-tmp
+        emptyDir: {}
+    # Download sops into the shared volume for the sidecar.
+    initContainers:
+      - name: download-tools
+        image: alpine:3.20
+        command: [sh, -ec]
+        args:
+          - |
+            wget -qO /custom-tools/sops https://github.com/getsops/sops/releases/download/v3.13.1/sops-v3.13.1.linux.amd64
+            chmod +x /custom-tools/sops
+            chmod -R a+rwX /custom-tools
+        volumeMounts:
+          - mountPath: /custom-tools
+            name: custom-tools
+    # The CMP sidecar: pulls the OCI chart, sops-decrypts secrets.yaml, renders (single-source).
+    extraContainers:
+      - name: cmp
+        command: ["/var/run/argocd/argocd-cmp-server"]
+        image: quay.io/argoproj/argocd:v3.5.2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 999
+        env:
+          - name: SOPS_AGE_KEY_FILE
+            value: /helm-secrets-private-keys/keys.txt
+        volumeMounts:
+          - mountPath: /var/run/argocd
+            name: var-files
+          - mountPath: /home/argocd/cmp-server/plugins
+            name: plugins
+          - mountPath: /home/argocd/cmp-server/config/plugin.yaml
+            subPath: plugin.yaml
+            name: cmp-plugin
+          - mountPath: /custom-tools
+            name: custom-tools
+          - mountPath: /helm-secrets-private-keys
+            name: helm-secrets-private-keys
+          - mountPath: /tmp
+            name: cmp-tmp
+
+  controller:
+    resources:
+      requests: { cpu: "100m", memory: "256Mi" }
+      limits:   { memory: "512Mi" }
+  redis:
+    resources:
+      requests: { cpu: "20m", memory: "64Mi" }
+      limits:   { memory: "128Mi" }

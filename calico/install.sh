@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
+# Calico CNI via the Tigera operator HELM CHART (replaces the old kubectl-apply of the operator
+# manifest + installation.yaml). Installs the operator and renders the Installation + APIServer CRs
+# from values.yaml.
+#
+# This stays a DAY-0 step on purpose: with kind's disableDefaultCNI the nodes are NotReady until a
+# CNI is installed, so Calico must exist BEFORE Argo CD can run. Run it right after
+# `kind create cluster`. Idempotent (helm upgrade --install).
 set -euo pipefail
-
-CALICO_VERSION="v3.29.1"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+CHART_VERSION="v3.29.1"   # tigera-operator chart == Calico v3.29.1
 
-echo "=== Tigera operator ($CALICO_VERSION) ==="
-kubectl apply --server-side -f "https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml"
-kubectl -n tigera-operator rollout status deploy/tigera-operator --timeout=180s
-kubectl wait --for=condition=established crd/installations.operator.tigera.io --timeout=90s
+helm repo add projectcalico https://docs.tigera.io/calico/charts >/dev/null 2>&1 || true
+helm repo update projectcalico
 
-echo "=== Installation (pod CIDR 10.244.0.0/16 to match kind) ==="
-kubectl apply -f "$HERE/installation.yaml"
+echo "=== install Calico (Tigera operator $CHART_VERSION) ==="
+helm upgrade --install calico projectcalico/tigera-operator \
+  --version "$CHART_VERSION" \
+  --namespace tigera-operator --create-namespace \
+  -f "$HERE/values.yaml" --wait --timeout 5m
 
 echo "=== wait for Calico + nodes Ready ==="
 for i in $(seq 1 60); do
@@ -18,8 +25,4 @@ for i in $(seq 1 60); do
 done
 kubectl -n calico-system rollout status ds/calico-node --timeout=300s
 kubectl wait --for=condition=Ready nodes --all --timeout=300s
-echo "Calico $CALICO_VERSION ready — NetworkPolicy is now enforced."
-
-# Install Calico as the cluster CNI (replaces kindnet) so NetworkPolicy is ENFORCED.
-# Run this right after `kind create cluster` — with disableDefaultCNI the nodes stay NotReady
-# until a CNI is installed. Idempotent.
+echo "Calico $CHART_VERSION ready — NetworkPolicy is now enforced."

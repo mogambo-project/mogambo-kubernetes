@@ -1,0 +1,18 @@
+apiVersion: v2
+name: mogambo-bootstrap
+description: >-
+  Day-0 bootstrap for the mogambo control plane. One `helm install` brings up
+  Argo CD (argo-cd subchart), plants the root app-of-apps, and plants the
+  Application that makes Argo CD manage itself from Git. After this, nothing
+  is installed by hand — Argo CD reconciles everything else from the repo.
+type: application
+version: 0.1.0
+
+# The upstream Argo CD chart is a dependency, so installing THIS chart installs
+# Argo CD too. Its values live under the `argo-cd:` key in values.yaml — the one
+# place the control plane is configured (used both by the day-0 install and by
+# the self-management Application, so they never drift).
+dependencies:
+  - name: argo-cd
+    version: 10.8.4            # Argo CD v3.5.x
+    repository: https://argoproj.github.io/argo-helm

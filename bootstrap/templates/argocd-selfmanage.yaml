@@ -1,0 +1,35 @@
+# Argo CD MANAGES ITSELF.
+# This Application points back at THIS bootstrap chart (same chart, same values.yaml), so Argo CD
+# reconciles its own install the same way it reconciles everything else. After the one-time
+# `helm install`, you never run `helm upgrade` by hand again: bump the argo-cd version or edit
+# its values in bootstrap/, push, and Argo CD rolls the change onto itself.
+#
+# Why point at the chart itself (not the remote argo-cd chart): the control plane is configured in
+# exactly one file — bootstrap/values.yaml (argo-cd: key). Rendering the same chart here guarantees
+# the self-managed state is byte-identical to what `helm install` created, so there is no drift to
+# fight. The first sync simply "adopts" the objects Helm made.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoURL | quote }}
+    targetRevision: {{ .Values.targetRevision | quote }}
+    path: bootstrap
+    helm:
+      # Argo CD's repo-server builds the argo-cd subchart dependency on sync. Keep a committed
+      # Chart.lock (helm dependency build) so the pinned version is reproducible offline.
+      skipCrds: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: false        # never let a bad render delete the control plane
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+      - ServerSideApply=true   # argo-cd CRDs/objects are large — avoid last-applied annotation limits

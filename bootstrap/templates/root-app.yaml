@@ -1,0 +1,29 @@
+# App-of-apps ROOT Application — planted by the bootstrap install, then owned by Argo CD.
+# It watches the argocd/ folder and (via directory.include) applies the core objects that
+# make the rest of the system work: the ApplicationSet (generates one app per unit), the CMP
+# ConfigMap (how units are rendered), the UI route, and the network-policy app. Edit any of
+# those in Git, push, and it auto-applies — no manual `kubectl apply`.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mogambo-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoURL | quote }}
+    targetRevision: {{ .Values.targetRevision | quote }}
+    path: argocd
+    directory:
+      include: '{applicationset.yaml,cmp-plugin.yaml,10-route.yaml}'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: false        # don't auto-delete these core objects if a file is removed from Git
+      selfHeal: true      # revert manual kubectl drift back to Git
+
+# Note: a change to cmp-plugin.yaml (the plugin *logic*) auto-applies but needs a repo-server
+# restart to take effect (subPath mount). CHART_VERSION lives in applicationset.yaml and takes
+# effect immediately on sync.
