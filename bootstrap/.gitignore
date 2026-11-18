@@ -1,0 +1,4 @@
+# The argo-cd dependency is pinned in Chart.lock (commit that). The vendored tarball is rebuilt
+# from the lock by `helm dependency build bootstrap/` (day-0) and by Argo CD's repo-server on sync,
+# so it doesn't need to live in Git.
+charts/

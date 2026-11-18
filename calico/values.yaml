@@ -1,0 +1,15 @@
+# Calico via the Tigera operator Helm chart. These values become the Installation + APIServer CRs
+# the operator reconciles (replacing the hand-applied installation.yaml).
+installation:
+  enabled: true
+  calicoNetwork:
+    ipPools:
+      - name: default-ipv4-ippool
+        blockSize: 26
+        cidr: 10.244.0.0/16          # MUST match the kind podSubnet (../cluster/kind-config.yaml)
+        encapsulation: VXLANCrossSubnet   # no BGP peering — right for a single-host kind/docker network
+        natOutgoing: Enabled
+        nodeSelector: all()
+
+apiServer:
+  enabled: true
