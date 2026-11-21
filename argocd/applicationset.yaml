@@ -44,6 +44,8 @@ spec:
         automated:
           prune: false        # removing a unit won't auto-delete its live objects (delete by hand)
           selfHeal: true      # revert manual kubectl drift back to Git
+        syncOptions:
+          - CreateNamespace=true   # create the destination namespace (mogambo) — no manual kubectl apply
       ignoreDifferences:
         - group: apps
           kind: Deployment

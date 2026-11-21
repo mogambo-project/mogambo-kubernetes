@@ -27,6 +27,11 @@ platformRepoURL: https://github.com/mogambo-project/mogambo-platform.git
 # Secret sops-age), then `helm template`.
 # ----------------------------------------------------------------------
 argo-cd:
+  # CRDs ship in this chart's crds/ directory: Helm installs those FIRST (refreshing API discovery),
+  # so the Application CRs in templates/ can be created in the very same `helm install`. Disable the
+  # subchart's own CRD templates to avoid a double-apply / ownership conflict with crds/.
+  crds:
+    install: false
   global:
     domain: argocd.localtest.me
 

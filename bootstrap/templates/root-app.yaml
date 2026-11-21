@@ -15,7 +15,7 @@ spec:
     targetRevision: {{ .Values.targetRevision | quote }}
     path: argocd
     directory:
-      include: '{applicationset.yaml,cmp-plugin.yaml,10-route.yaml}'
+      include: '{applicationset.yaml,10-route.yaml}'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
