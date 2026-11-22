@@ -20,6 +20,11 @@ spec:
     targetRevision: {{ .Values.targetRevision | quote }}
     path: bootstrap
     helm:
+      # MUST match the day-0 `helm install mogambo` release name. Argo CD defaults the release name
+      # to the Application name ("argocd"); if left default, the render produces a SECOND ArgoCD
+      # (argocd-*) instead of adopting the one Helm installed (mogambo-argocd-*). Pinning it to
+      # "mogambo" makes the first sync adopt, not duplicate.
+      releaseName: mogambo
       # Argo CD's repo-server builds the argo-cd subchart dependency on sync. Keep a committed
       # Chart.lock (helm dependency build) so the pinned version is reproducible offline.
       skipCrds: false
