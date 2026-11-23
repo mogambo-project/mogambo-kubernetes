@@ -12,8 +12,8 @@ spec:
     - argocd.localtest.me
   rules:
     - backendRefs:
-        - name: argocd-server
+        - name: mogambo-argocd-server   # ArgoCD is installed under the `mogambo` Helm release (bootstrap chart)
           port: 80
 
 # Exposes the Argo CD UI through the shared Envoy Gateway at http://argocd.localtest.me:8090/
-# (the `argocd` namespace is allow-listed on the Gateway — see ../gateway/10-gateway.yaml).
+# (the `argocd` namespace is allow-listed on the Gateway — see the gateway tool in the mogambo-platform repo).
