@@ -55,8 +55,8 @@ argo-cd:
 
   repoServer:
     resources:
-      requests: { cpu: "50m", memory: "128Mi" }
-      limits:   { memory: "512Mi" }
+      requests: { cpu: "50m", memory: "256Mi" }
+      limits:   { memory: "1Gi" }      # helm/CMP rendering of many apps needs headroom
     # Extra volumes for the CMP sidecar (var-files + plugins are chart defaults, reused).
     volumes:
       - name: custom-tools                 # holds the sops binary (init container populates it)
@@ -110,8 +110,8 @@ argo-cd:
 
   controller:
     resources:
-      requests: { cpu: "100m", memory: "256Mi" }
-      limits:   { memory: "512Mi" }
+      requests: { cpu: "100m", memory: "512Mi" }
+      limits:   { memory: "2Gi" }      # 23 apps' state needs headroom — 512Mi OOMKilled it in a cancel-everything loop
   redis:
     resources:
       requests: { cpu: "20m", memory: "64Mi" }
